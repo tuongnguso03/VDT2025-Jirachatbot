@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-telegram-bot
+atlassian-python-api
+google-generativeai
+psycopg2-binary
+sqlalchemy
+APScheduler
+python-dotenv
