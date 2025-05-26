@@ -1,18 +1,65 @@
-version: '3.9'
+# version: '3.9'
+
+# services:
+#   app:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: telegram-bot
+#     restart: always
+#     env_file:
+#       - .env
+#     ports:
+#       - "8000:8000"
+#     volumes:
+#       - ./app:/app/app
+#     depends_on:
+#       - db
+#     networks:
+#       - backend
+
+#   db:
+#     image: postgres:15
+#     container_name: postgres
+#     restart: always
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: ${POSTGRES_DB}
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     ports:
+#       - "5432:5432"
+#     networks:
+#       - backend
+
+# volumes:
+#   postgres_data:
+
+# networks:
+#   backend:
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: telegram-bot
+  api:
+    build: .
+    container_name: fastapi
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
     restart: always
     env_file:
       - .env
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app
+    depends_on:
+      - db
+    networks:
+      - backend
+
+  telegram-bot:
+    build: .
+    container_name: telegram-bot
+    command: python bot_runner.py 
+    env_file:
+      - .env
     depends_on:
       - db
     networks:
@@ -21,7 +68,6 @@ services:
   db:
     image: postgres:15
     container_name: postgres
-    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
