@@ -11,4 +11,4 @@ class Message(Base):
     message = Column(TEXT, nullable=False)
     timestamp = Column(TIMESTAMP, server_default=func.now())
 
-    user = relationship("User", backref="messages")
+    user = relationship("User", back_populates="messages")

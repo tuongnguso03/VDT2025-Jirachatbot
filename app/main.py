@@ -1,19 +1,19 @@
 from fastapi import FastAPI
+from modules.fastapi.oauth_callback import router as oauth_router
 from database import Base, engine
+from models.user import User
+from models.message import Message
 
 app = FastAPI()
 
-print(Base.metadata.tables.keys())
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the FastAPI application!"}
 
 @app.on_event("startup")
 def on_startup():
-    print("Creating database tables if they do not exist...")
-    from models.user import User
-    from models.message import Message
-
-    Base.metadata.create_all(bind=engine)
     print("Database tables created (if not existed)")
 
-@app.get("/")
-async def root():
-    return {"message": "Hello, FastAPI is running again!"}
+    Base.metadata.create_all(bind=engine)
+
+app.include_router(oauth_router)
