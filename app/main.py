@@ -16,4 +16,4 @@ def on_startup():
 
 @app.get("/")
 async def root():
-    return {"message": "Hello, FastAPI is running!"}
+    return {"message": "Hello, FastAPI is running again!"}
