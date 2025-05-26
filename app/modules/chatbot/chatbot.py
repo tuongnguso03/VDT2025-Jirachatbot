@@ -17,7 +17,7 @@ config = {"temperature": 0}
 def reformat_chat_history(raw_chat_history: list = None):
     raise NotImplementedError #do later
 
-def chat_with_function_calling(new_message, chat_object: Chat = None, chat_history: list = None, functions: list[GeminiFunction] = None):
+def chat_with_function_calling(new_message, chat_object: Chat = None, chat_history: list = None, functions: list[GeminiFunction] = None, config: dict = config):
     """
     Initiates or continues a chat with the Gemini model, supporting function calling.
 
@@ -42,7 +42,7 @@ def chat_with_function_calling(new_message, chat_object: Chat = None, chat_histo
     """
     if functions:
         # Prepare the tools from the GeminiFunction objects
-        config["tools"] = [f.get_tool() for f in functions]
+        config.update({"tools": [f.get_tool() for f in functions]})
     else: config = None
 
     if chat_object is None:
@@ -60,5 +60,11 @@ if __name__ == "__main__":
     print("*"*20)
     print(chat_with_function_calling("Hello, what is 1+1?", functions=[confluence_function])[1])
     print("*"*20)
-    print(chat_with_function_calling("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])[1])
+    chat_object, chat_history = chat_with_function_calling("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])
+    print(chat_history)
+    print("*"*20)
+    print(chat_with_function_calling("What did I just ask you to do?", chat_object = chat_object)[1])
+    print("*"*20)
+    print(chat_with_function_calling("Get the Rayquaza page from the same space", chat_object = chat_object, functions=[confluence_function])[1] )
+    
     
