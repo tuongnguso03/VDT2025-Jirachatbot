@@ -1,6 +1,4 @@
 from google import genai
-from google.genai import types as genai_types
-from google.genai.chats import Chat
 from utils.function_declaration import GeminiFunction, confluence_function
 import os
 from dotenv import load_dotenv
@@ -17,7 +15,10 @@ config = {"temperature": 0}
 def reformat_chat_history(raw_chat_history: list = None):
     raise NotImplementedError #do later
 
-def chat_with_function_calling(new_message, chat_object: Chat = None, chat_history: list = None, functions: list[GeminiFunction] = None, config: dict = config):
+def chat_function(new_message, 
+                               chat_history: list = None, 
+                               functions: list[GeminiFunction, callable] = None, 
+                               config: dict = config):
     """
     Initiates or continues a chat with the Gemini model, supporting function calling.
 
@@ -27,8 +28,6 @@ def chat_with_function_calling(new_message, chat_object: Chat = None, chat_histo
 
     Args:
         new_message (str): The new message/prompt to send to the model.
-        chat_object (Chat, optional): An existing `Chat` object to continue the conversation.
-                                      If None, a new chat will be started. Defaults to None.
         chat_history (list, optional): A list of previous messages to initialize the chat with,
                                        if `chat_object` is None. Defaults to None.
         functions (list[GeminiFunction], optional): A list of `GeminiFunction` objects
@@ -42,29 +41,49 @@ def chat_with_function_calling(new_message, chat_object: Chat = None, chat_histo
     """
     if functions:
         # Prepare the tools from the GeminiFunction objects
-        config.update({"tools": [f.get_tool() for f in functions]})
+        config.update({
+            "tools": [
+                f.get_tool() if isinstance(f, GeminiFunction) else f
+                for f in functions
+                if isinstance(f, GeminiFunction) or callable(f)
+            ]
+        })
     else: config = None
 
-    if chat_object is None:
-        chat_object = client.chats.create(model = model,
+    chat_object = client.chats.create(model = model,
                             history = chat_history) #placeholder
-    else:
-        pass
-    chat_object.send_message(new_message, config = config)
+    
+    response = chat_object.send_message(new_message, config = config)
 
-    return chat_object, chat_object._curated_history
+    return response, chat_object._curated_history
 
 
 if __name__ == "__main__":
-    print(chat_with_function_calling("Hello, what is 1+1?")[1])
+    print(chat_function("Hello, what is 1+1?")[1])
     print("*"*20)
-    print(chat_with_function_calling("Hello, what is 1+1?", functions=[confluence_function])[1])
+    print(chat_function("Hello, what is 1+1?", functions=[confluence_function])[1])
     print("*"*20)
-    chat_object, chat_history = chat_with_function_calling("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])
+    response, chat_history = chat_function("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])
     print(chat_history)
     print("*"*20)
-    print(chat_with_function_calling("What did I just ask you to do?", chat_object = chat_object)[1])
+    print(chat_function("What did I just ask you to do?")[1])
     print("*"*20)
-    print(chat_with_function_calling("Get the Rayquaza page from the same space", chat_object = chat_object, functions=[confluence_function])[1] )
+    print(chat_function("Get the Rayquaza page from the same space", functions=[confluence_function])[0] )
+    print("*"*20)
+    def the_ultimate_function(question: str):
+        """
+        Gives the answer to life, but nothing else
+        
+        Args:
+            question (str): Your question.
+        """
+        
+        if "life" in question:
+            return 424
+        else:
+            return "Invalid question"
+    print(chat_function("Get the Rayquaza page from the Sue space", functions=[confluence_function, the_ultimate_function], config={})[0])
+    print("*"*20)
+    print(chat_function("Give me the answer to what life is", functions=[confluence_function, the_ultimate_function])[0])
     
     
