@@ -2,7 +2,7 @@ fastapi
 uvicorn
 python-telegram-bot
 atlassian-python-api
-google-generativeai
+google-genai
 psycopg2-binary
 sqlalchemy
 APScheduler
