@@ -1,6 +1,6 @@
 from google import genai
 from google.genai import types as genai_types
-from utils.function_declaration import GeminiFunction, confluence_function
+from .utils.function_declaration import GeminiFunction, confluence_function
 import os
 from dotenv import load_dotenv
 from typing import List, Dict

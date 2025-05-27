@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from modules.fastapi.oauth_callback import router as oauth_router
+from modules.fastapi.refresh_token import start_scheduler
 from database import Base, engine
 from models.user import User
 from models.message import Message
@@ -17,3 +18,4 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
 app.include_router(oauth_router)
+start_scheduler()
