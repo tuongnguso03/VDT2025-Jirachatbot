@@ -2,11 +2,16 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from models import User, Message
 from database import SessionLocal
-from modules.fastapi.config import get_jira_auth_url, BOT_TOKEN
+from modules.fastapi.config import get_jira_auth_url
 import json
-import requests
 import asyncio
-from modules.chatbot.chatbot import chat_function, confluence_function
+from modules.chatbot.chatbot import chat_function, confluence_function, reformat_chat_history
+import logging
+import traceback
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
@@ -57,20 +62,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": msg.role, "message": msg.message} for msg in recent_messages
             ]
 
-            pretty_json = json.dumps(formatted_conversation, ensure_ascii=False)
-
+            chat_history = reformat_chat_history(formatted_conversation)
             loop = asyncio.get_event_loop()
-            response, updated_history = await loop.run_in_executor(
-                None, lambda: chat_function(user_text, chat_history=pretty_json, functions=[confluence_function])
+            response, chat_history = await loop.run_in_executor(
+                None, lambda: chat_function(user_text, chat_history=chat_history)
             )
 
-            msg_bot = Message(userId=user.userId, role="bot", message=response)
+            reply_text = response.candidates[0].content.parts[0].text
+
+            msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
             session.add(msg_bot)
             session.commit()
 
-            await update.message.reply_text(response)
+            await update.message.reply_text(reply_text)
     except Exception as e:
-        print(f"Error in handle_message: {e}")
+        logger.error(f"Error in handle_message: {e}")
+        logger.error(traceback.format_exc())
         await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
     finally:
         session.close()
