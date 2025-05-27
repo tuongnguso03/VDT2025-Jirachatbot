@@ -4,6 +4,7 @@ import datetime
 from database import SessionLocal
 from models import User
 from modules.fastapi.config import JIRA_CLIENT_ID, JIRA_CLIENT_SECRET, REDIRECT_URI, BOT_TOKEN
+from fastapi.responses import HTMLResponse 
 
 app = FastAPI()
 router = APIRouter()
@@ -49,8 +50,28 @@ def oauth_callback(code: str, state: str):
     session.close()
 
     notify_user(telegram_id, "🎉 Bạn đã liên kết thành công với Jira!")
-
-    return {"message": "Đăng nhập Jira thành công với access token: {access_token}, Refresh token: {refresh_token}. Bạn có thể quay lại Telegram."}
+    
+    html_content = """
+    <html>
+    <head>
+    <title>Đăng nhập thành công</title>
+    <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f4f4; text-align: center; padding-top: 50px; }
+    .container { background: white; padding: 20px; margin: auto; width: 50%; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
+    button { padding: 10px 20px; background-color: #0088cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #006699; }
+    </style>
+    </head>
+    <body>
+    <div class="container">
+    <h1>Đăng nhập thành công!</h1>
+    <p>Bạn đã liên kết thành công với Jira!</p>
+    <a href="https://web.telegram.org/a"><button>Back to Telegram</button></a>
+    </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @router.post("/oauth/refresh")
 def oauth_refresh(telegram_id: int):
