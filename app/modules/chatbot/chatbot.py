@@ -1,7 +1,9 @@
 from google import genai
-from utils.function_declaration import GeminiFunction, confluence_function
+from google.genai import types as genai_types
+from .utils.function_declaration import GeminiFunction, confluence_function
 import os
 from dotenv import load_dotenv
+from typing import List, Dict
 
 import asyncio
 # Only run this block for Gemini Developer API
@@ -12,8 +14,51 @@ config = {"temperature": 0}
 
 
 
-def reformat_chat_history(raw_chat_history: list = None):
-    raise NotImplementedError #do later
+def reformat_chat_history(
+        raw_chat_history: List[Dict[str, str]]
+    ) -> List[genai_types.Content]:
+    """
+    Parses a list of dictionaries into a list of Gemini API Content objects.
+
+    This function takes a chat history in a simple dictionary format and
+    converts it into a list of `genai.types.Content` objects, mapping
+    the 'bot' role to 'model' for Gemini API compatibility.
+
+    Args:
+        chat_history: A list of dictionaries, where each dictionary must have
+                      a "role" (either "user" or "bot") and a "message" key.
+
+    Returns:
+        A list of `genai.types.Content` objects ready for the Gemini API.
+        Returns an empty list if google.generativeai is not available
+        or if input is malformed.
+    """
+    gemini_history = []
+
+    for message in raw_chat_history:
+        role = message.get("role")
+        text = message.get("message")
+
+        if not role or not text:
+            print(f"Skipping invalid message (missing role or message): {message}")
+            continue
+
+        # Map 'bot' role to 'model'
+        if role.lower() == "bot":
+            gemini_role = "model"
+        elif role.lower() == "user":
+            gemini_role = "user"
+        else:
+            print(f"Skipping message with unknown role '{role}': {message}")
+            continue
+
+        # Create the Content and Part objects
+        gemini_history.append(genai_types.Content(
+            role=gemini_role,
+            parts=[genai_types.Part(text=text)],
+        ))
+
+    return gemini_history
 
 def chat_function(new_message, 
                                chat_history: list = None, 
@@ -59,31 +104,54 @@ def chat_function(new_message,
 
 
 if __name__ == "__main__":
-    print(chat_function("Hello, what is 1+1?")[1])
-    print("*"*20)
-    print(chat_function("Hello, what is 1+1?", functions=[confluence_function])[1])
-    print("*"*20)
-    response, chat_history = chat_function("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])
+    # print(chat_function("Hello, what is 1+1?")[1])
+    # print("*"*20)
+    # print(chat_function("Hello, what is 1+1?", functions=[confluence_function])[1])
+    # print("*"*20)
+    # response, chat_history = chat_function("Get me the Pikachu page from the Pokemon space on Confluence", functions=[confluence_function])
+    # print(chat_history)
+    # print("*"*20)
+    # print(chat_function("What did I just ask you to do?")[1])
+    # print("*"*20)
+    # print(chat_function("Get the Rayquaza page from the same space", functions=[confluence_function])[0] )
+    # print("*"*20)
+    # def the_ultimate_function(question: str):
+    #     """
+    #     Gives the answer to life, but nothing else
+        
+    #     Args:
+    #         question (str): Your question.
+    #     """
+        
+    #     if "life" in question:
+    #         return 424
+    #     else:
+    #         return "Invalid question"
+    # print(chat_function("Get the Rayquaza page from the Sue space", functions=[confluence_function, the_ultimate_function], config={"temperature": 0, ""})[0])
+    # print("*"*20)
+    # print(chat_function("Give me the answer to what life is", functions=[confluence_function, the_ultimate_function])[0])
+    raw_chat_history = [
+        {
+            "role": "user",
+            "message": "hihi"
+        },
+        {
+            "role": "bot",
+            "message": "API Gemini hiện chưa sẵn sàng, vui lòng thử lại sau."
+        },
+        {
+            "role": "user",
+            "message": "ok nha"
+        },
+        {
+            "role": "bot",
+            "message": "API Gemini hiện chưa sẵn sàng, vui lòng thử lại sau."
+        },
+    ]
+    chat_history = reformat_chat_history(raw_chat_history)
+    response, chat_history = chat_function("Lặp lại điều m vừa nói, nhưng mà thêm \"bolobala\" ở đầu câu", chat_history=chat_history, functions=[confluence_function])
+    print(response.candidates[0].content.parts[0].text)
     print(chat_history)
-    print("*"*20)
-    print(chat_function("What did I just ask you to do?")[1])
-    print("*"*20)
-    print(chat_function("Get the Rayquaza page from the same space", functions=[confluence_function])[0] )
-    print("*"*20)
-    def the_ultimate_function(question: str):
-        """
-        Gives the answer to life, but nothing else
-        
-        Args:
-            question (str): Your question.
-        """
-        
-        if "life" in question:
-            return 424
-        else:
-            return "Invalid question"
-    print(chat_function("Get the Rayquaza page from the Sue space", functions=[confluence_function, the_ultimate_function], config={})[0])
-    print("*"*20)
-    print(chat_function("Give me the answer to what life is", functions=[confluence_function, the_ultimate_function])[0])
+    
     
     

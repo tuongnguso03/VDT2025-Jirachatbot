@@ -2,15 +2,26 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from models import User, Message
 from database import SessionLocal
-from modules.fastapi.config import get_jira_auth_url, BOT_TOKEN
-import aiohttp
+from modules.fastapi.config import get_jira_auth_url
+import json
+import asyncio
+from modules.chatbot.chatbot import chat_function, confluence_function, reformat_chat_history
+import logging
+import traceback
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
     session = SessionLocal()
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
-        user = User(telegramId=telegram_id)
+        user = User(
+            telegramId=telegram_id,
+            telegramUsername=update.effective_user.username
+        )
         session.add(user)
         session.commit()
 
@@ -37,45 +48,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session.add(msg_user)
             session.commit()
 
-            gemini_reply = await call_gemini_api(user_text)
+            recent_messages = (
+                session.query(Message)
+                .filter_by(userId=user.userId)
+                .order_by(Message.timestamp.desc()) 
+                .limit(10)
+                .all()
+            )
 
-            msg_bot = Message(userId=user.userId, role="bot", message=gemini_reply)
+            recent_messages.reverse()
+
+            formatted_conversation = [
+                {"role": msg.role, "message": msg.message} for msg in recent_messages
+            ]
+
+            chat_history = reformat_chat_history(formatted_conversation)
+            loop = asyncio.get_event_loop()
+            response, chat_history = await loop.run_in_executor(
+                None, lambda: chat_function(user_text, chat_history=chat_history)
+            )
+
+            reply_text = response.candidates[0].content.parts[0].text
+
+            msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
             session.add(msg_bot)
             session.commit()
 
-            await update.message.reply_text(gemini_reply)
-        else:
-            await update.message.reply_text("Bạn chưa đăng ký, vui lòng gửi /start để bắt đầu.")
+            await update.message.reply_text(reply_text)
     except Exception as e:
-        print(f"Error in handle_message: {e}")
+        logger.error(f"Error in handle_message: {e}")
+        logger.error(traceback.format_exc())
         await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
     finally:
         session.close()
-
-
-async def call_gemini_api(text: str) -> str:
-    url = "https://api.gemini.example.com/chat"  # URL chưa có thật
-
-    # Nếu URL chưa thay đổi, nghĩa là chưa có API thật thì trả về câu thông báo
-    if url == "https://api.gemini.example.com/chat":
-        return "API Gemini hiện chưa sẵn sàng, vui lòng thử lại sau."
-
-    payload = {"message": text}
-    headers = {
-        "Authorization": "Bearer YOUR_GEMINI_API_KEY",  # Thay bằng key thật khi có
-        "Content-Type": "application/json"
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("reply", "Không có câu trả lời.")
-                else:
-                    text_resp = await resp.text()
-                    print(f"API trả về lỗi status {resp.status}: {text_resp}")
-                    return "Xin lỗi, tôi không thể xử lý yêu cầu ngay bây giờ."
-    except Exception as e:
-        print(f"Lỗi gọi API Gemini: {e}")
-        return "Xin lỗi, tôi không thể xử lý yêu cầu ngay bây giờ."
