@@ -65,7 +65,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_history = reformat_chat_history(formatted_conversation)
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: chat_function(user_text, chat_history=chat_history)
+                None, lambda: chat_function(user_text, chat_history=chat_history, user_id=user.userId)
             )
 
             reply_text = response.candidates[0].content.parts[0].text
