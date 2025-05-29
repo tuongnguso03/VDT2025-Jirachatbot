@@ -38,6 +38,7 @@ def oauth_callback(code: str, state: str):
     cloud_data = cloud_response.json()
 
     cloud_id = cloud_data[0]["id"]
+    domain = cloud_data[0]["name"]
 
     session = SessionLocal()
     user = session.query(User).filter_by(telegramId=telegram_id).first()
@@ -46,6 +47,7 @@ def oauth_callback(code: str, state: str):
         user.refreshToken = refresh_token
         user.expiredAt = datetime.datetime.now() + datetime.timedelta(seconds=expired_in) if expired_in else None
         user.cloudId = cloud_id
+        user.domain = domain
         session.commit()
     session.close()
 
