@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import pytz
 import unicodedata
+import json
 
 def get_jira_client(access_token: str, cloud_id: str) -> Jira:
     """
@@ -98,6 +99,30 @@ def get_issue_detail(access_token, cloud_id, issue_key):
         "project": fields["project"]["key"] if fields.get("project") else None
     }
 
+def get_worklogs(access_token, cloud_id, issue_key):
+    jira = get_jira_client(access_token, cloud_id)
+    
+    raw_worklogs = jira.issue_get_worklog(issue_key)
+    
+    if isinstance(raw_worklogs, str):
+        worklogs_data = json.loads(raw_worklogs)
+    else:
+        worklogs_data = raw_worklogs
+    
+    worklogs = worklogs_data.get("worklogs", [])
+    
+    formatted_worklogs = []
+    for w in worklogs:
+        formatted_worklogs.append({
+            "id": w.get("id"),
+            "author": w.get("author", {}).get("displayName"),
+            "timeSpent": w.get("timeSpent"),
+            "started": w.get("started"),
+            "comment": w.get("comment")
+        })
+        
+    return formatted_worklogs
+
 def format_started(user_input: str, tz='Asia/Ho_Chi_Minh'):
     dt = datetime.strptime(user_input, "%Y-%m-%d %H:%M")
     
@@ -181,6 +206,32 @@ def create_issue(access_token, cloud_id, domain, project_key, summary, descripti
         "description": description,
     }
 
+def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None, assignee_email=None):
+    jira = get_jira_client(access_token, cloud_id)
+    project_key = issue_key.split('-')[0]
+    
+    assignee_id = None
+    if assignee_email or assignee_displayname:
+        assignee_id = get_account_id(jira, project_key, assignee_email, assignee_displayname)
+
+    if assignee_id:
+        jira.assign_issue(issue_key, assignee_id)
+    else:
+        pass
+
+    issue = jira.issue(issue_key)
+
+    return {
+        "project_key": project_key,
+        "issue_id": issue.get("id", None),
+        "issue_key": issue.get("key", None),
+        "assignee_id": assignee_id,
+        "assignee_displayname": assignee_displayname,
+        "summary": issue.get("fields", {}).get("summary", None),
+        "description": issue.get("fields", {}).get("description", None),
+        "issue_type": issue.get("fields", {}).get("issuetype", {}).get("name", None),
+    }
+
 def transition_issue(access_token, cloud_id, issue_key, transition_name):
     jira = get_jira_client(access_token, cloud_id)
     
@@ -199,13 +250,56 @@ def transition_issue(access_token, cloud_id, issue_key, transition_name):
         "assignee": assignee_name,
     }
 
+def get_comments(access_token, cloud_id, issue_key):
+    jira = get_jira_client(access_token, cloud_id)
+    comments = jira.issue_get_comments(issue_key)
+
+    if isinstance(comments, str):
+        comments_data = json.loads(comments)
+    else:
+        comments_data = comments
+
+    comments = comments_data.get("comments", [])
+    
+    formatted_comments = []
+    for c in comments:
+        formatted_comments.append({
+            "id": c.get("id"),
+            "author": c.get("author", {}).get("displayName"),
+            "body": c.get("body"),
+            "created": c.get("created"),
+            "updated": c.get("updated")
+        })
+
+    return formatted_comments
+
+
+def add_comment(access_token, cloud_id, issue_key, comment):
+    jira = get_jira_client(access_token, cloud_id)
+    comment_obj = jira.issue_add_comment(issue_key, comment)
+    comment_id = comment_obj.get('id') if isinstance(comment_obj, dict) else getattr(comment_obj, 'id', None)
+    return {
+        "issue_key": issue_key,
+        "comment_id": comment_id,
+        "comment": comment,
+    }
+
+def edit_comment(access_token, cloud_id, issue_key, comment_id, new_comment, visibility=None, notify_users=True):
+    jira = get_jira_client(access_token, cloud_id)
+    jira.issue_edit_comment(issue_key, comment_id, new_comment, visibility=visibility, notify_users=notify_users)
+    return {
+        "issue_key": issue_key,
+        "comment_id": comment_id,
+        "new_comment": new_comment,
+    }
+
 def main():
-    access_token = "eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiJlYWMxOTNmOC1kZTFiLTRhZjctYWNhYi05ZjJlODA5OThjMjUiLCJzdWIiOiI3MTIwMjA6YjZkMTIyYzgtNWY2OC00N2EzLTkwMjUtMTQ4NDc5MTBkNTE4IiwibmJmIjoxNzQ4NTMxMTg0LCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODUzMTE4NCwiZXhwIjoxNzQ4NTM0Nzg0LCJhdWQiOiJ0VWc5VGpqYTRTSmEwTld5M0tBUGNjQXI0M3BiZGNIdSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9yZWZyZXNoX2NoYWluX2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUtNzEyMDIwOmI2ZDEyMmM4LTVmNjgtNDdhMy05MDI1LTE0ODQ3OTEwZDUxOC03NDJjNzQzMC1lYjg0LTQxZDItYjE5Mi1jZDg1MzVhZjBhZDIiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcnRpIjoiMGFmODYyNDItN2E0OC00MGM0LTg3YTMtMGY3MmU2MjA4YzY3IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3VqdCI6IjA3OGQ5NTc2LTUyMTgtNGM2Yi1iZWFiLTVmNTE0ZDE3OGExOSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hdGxfdG9rZW5fdHlwZSI6IkFDQ0VTUyIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9zZXNzaW9uX2lkIjoiNmY0NDI0OWEtODczYS00ZmU4LTljMjUtYTMwNzFjYTBhM2Y0IiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL2ZpcnN0UGFydHkiOmZhbHNlLCJodHRwczovL2F0bGFzc2lhbi5jb20vdmVyaWZpZWQiOnRydWUsImNsaWVudF9pZCI6InRVZzlUamphNFNKYTBOV3kzS0FQY2NBcjQzcGJkY0h1Iiwic2NvcGUiOiJtYW5hZ2U6amlyYS1wcm9qZWN0IG9mZmxpbmVfYWNjZXNzIHJlYWQ6YWNjb3VudCByZWFkOmppcmEtdXNlciByZWFkOmppcmEtd29yayByZWFkOm1lIHdyaXRlOmppcmEtd29yayIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9wcm9jZXNzUmVnaW9uIjoidXMtd2VzdC0yIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL2VtYWlsRG9tYWluIjoiZ21haWwuY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRFbWFpbCI6Ijc2MzNlMzQyLWM0YzctNGFmMS04NDU0LTMzMjMwYTE1ZTM0NUBjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vM2xvIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdmVyaWZpZWQiOnRydWUsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9vYXV0aENsaWVudElkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsRG9tYWluIjoiY29ubmVjdC5hdGxhc3NpYW4uY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRJZCI6IjcxMjAyMDo4YjY0NzEwOS01YzM1LTRmNDEtYTE2OS00NzcxOTE4ZDEyNTAifQ.vSwgHI8kGbKsI2Thgx0uoba1GflddrzXhuVL1EYZiWUUVHNX1Jeadn6huAZdO4Dpnv2mu4KY8F6KPP53sjKCOTyOd-zbnLjPIAgZPm_AKyanVUBgTC6XJrhsBBlbrvraMBuU9US3pyVmvZVOJWrE6y2xNVunNC_ep-wIcJcVnYuJaX3qjW43RSaebPjsSNB7PtdH6ZSw9qyM50YZqUTVw2l682ft39G993f3kr7MeLcSmipEyhWvWPI3rWXU7fdEtVvRgg9z1qIbZlLVSDg5lEqizLy3JK33Djq2mu6Dj3aY9tjsBITCMCLJ_43pwx9fZdPZMCVqFz56NICYqXaJNQ"
+    access_token = "eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiIxMjU3ZmEwZS1hYmFlLTRmNTUtYmY5Ny05MTk3NjU5YzlhMDUiLCJzdWIiOiI3MTIwMjA6YjZkMTIyYzgtNWY2OC00N2EzLTkwMjUtMTQ4NDc5MTBkNTE4IiwibmJmIjoxNzQ4NTM0NzYwLCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODUzNDc2MCwiZXhwIjoxNzQ4NTM4MzYwLCJhdWQiOiJ0VWc5VGpqYTRTSmEwTld5M0tBUGNjQXI0M3BiZGNIdSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9yZWZyZXNoX2NoYWluX2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUtNzEyMDIwOmI2ZDEyMmM4LTVmNjgtNDdhMy05MDI1LTE0ODQ3OTEwZDUxOC03NDJjNzQzMC1lYjg0LTQxZDItYjE5Mi1jZDg1MzVhZjBhZDIiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdWp0IjoiMDc4ZDk1NzYtNTIxOC00YzZiLWJlYWItNWY1MTRkMTc4YTE5IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL2F0bF90b2tlbl90eXBlIjoiQUNDRVNTIiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Nlc3Npb25faWQiOiI2ZjQ0MjQ5YS04NzNhLTRmZTgtOWMyNS1hMzA3MWNhMGEzZjQiLCJodHRwczovL2F0bGFzc2lhbi5jb20vZmlyc3RQYXJ0eSI6ZmFsc2UsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS92ZXJpZmllZCI6dHJ1ZSwiY2xpZW50X2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJzY29wZSI6Im1hbmFnZTpqaXJhLXByb2plY3Qgb2ZmbGluZV9hY2Nlc3MgcmVhZDphY2NvdW50IHJlYWQ6amlyYS11c2VyIHJlYWQ6amlyYS13b3JrIHJlYWQ6bWUgd3JpdGU6amlyYS13b3JrIiwidmVyaWZpZWQiOiJ0cnVlIiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Byb2Nlc3NSZWdpb24iOiJ1cy13ZXN0LTIiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcnRpIjoiNGEwOTg0YjktMGExMC00YzM0LTg1NTQtNmRjNzgyZjM0NjE1IiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL2VtYWlsRG9tYWluIjoiZ21haWwuY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRFbWFpbCI6Ijc2MzNlMzQyLWM0YzctNGFmMS04NDU0LTMzMjMwYTE1ZTM0NUBjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vM2xvIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdmVyaWZpZWQiOnRydWUsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9vYXV0aENsaWVudElkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsRG9tYWluIjoiY29ubmVjdC5hdGxhc3NpYW4uY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRJZCI6IjcxMjAyMDo4YjY0NzEwOS01YzM1LTRmNDEtYTE2OS00NzcxOTE4ZDEyNTAifQ.MIgNlPvxOhCxyB8qX9DC3wItm8eBYr_Pnj1smfJrrRUfKB4w74djcPeCjcAz9IOCdfa8SGJUQGqlzw3lFAh7rovZe7cWsQQCwvmaGV6tuMizO_CQAURCpImY7PJeli-s75-Z4Y4qP75z3bLPBeyMnzRC3dsMY4V-iVLEFZ1LhWHdG_HC54Mdi0LGQao0_vFHBPkcrCvfb5RXjzg6pgySPM-qz3NEu6WP0Xyk4qoydm0VOYy6YlfixsON9fqtiWdDNuNGuxDzUSDAE5lzEwwNZwqhOH4BX8d82810SMmW_MF963-5NrklUWgk5ufukBwE7j3jnNGC7WZMRtQnvUWW9g"
     cloud_id = "ddd063d1-c577-4b9d-8271-d902cc0bd792"
     domain = "stu-team"
     
     try:
-        issue = create_issue(access_token, cloud_id, domain, "SCRUM", "Hello", "30", "Task", "Pham Thi Ngoc Mai")
+        issue = get_worklogs(access_token, cloud_id, "SCRUM-6")
         print(issue)
     except Exception as e:
         print("Lỗi khi lấy issue:", str(e))
