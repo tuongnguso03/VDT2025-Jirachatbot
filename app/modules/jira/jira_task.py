@@ -2,6 +2,8 @@ from atlassian import Jira
 import requests
 from datetime import datetime
 import pytz
+import unicodedata
+import json
 
 def get_jira_client(access_token: str, cloud_id: str) -> Jira:
     """
@@ -97,53 +99,84 @@ def get_issue_detail(access_token, cloud_id, issue_key):
         "project": fields["project"]["key"] if fields.get("project") else None
     }
 
-def log_work(access_token, cloud_id, issue_key, time_spent, comment=""):
+def get_worklogs(access_token, cloud_id, issue_key):
     jira = get_jira_client(access_token, cloud_id)
-    url = f"/rest/api/3/issue/{issue_key}/worklog"
-    payload = {
-        "timeSpent": time_spent,
-        "comment": {
-            "type": "doc",
-            "version": 1,
-            "content": [
-                {
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": comment
-                        }
-                    ]
-                }
-            ]
-        }
-    }
+    
+    raw_worklogs = jira.issue_get_worklog(issue_key)
+    
+    if isinstance(raw_worklogs, str):
+        worklogs_data = json.loads(raw_worklogs)
+    else:
+        worklogs_data = raw_worklogs
+    
+    worklogs = worklogs_data.get("worklogs", [])
+    
+    formatted_worklogs = []
+    for w in worklogs:
+        formatted_worklogs.append({
+            "id": w.get("id"),
+            "author": w.get("author", {}).get("displayName"),
+            "timeSpent": w.get("timeSpent"),
+            "started": w.get("started"),
+            "comment": w.get("comment")
+        })
+        
+    return formatted_worklogs
 
-    response = jira.post(url, data=payload)
+def format_started(user_input: str, tz='Asia/Ho_Chi_Minh'):
+    dt = datetime.strptime(user_input, "%Y-%m-%d %H:%M")
+    
+    timezone = pytz.timezone(tz)
+    dt = timezone.localize(dt)
+    
+    return dt.strftime('%Y-%m-%dT%H:%M:%S.000%z')
+
+def log_work(access_token, cloud_id, issue_key, date, time_spend, comment):
+    jira = get_jira_client(access_token, cloud_id)
+    started = format_started(date)
+    jira.issue_worklog(issue_key, started, time_spend*60, comment)
 
     return {
-        "worklog_id": response.get("id"),
         "issue_key": issue_key,
-        "time_spent": time_spent,
-        "comment": comment,
-        "author": response.get("author", {}).get("displayName") if response.get("author") else None,
-        "created": response.get("created"),
-        "updated": response.get("updated")
+        "started": started,
+        "time_spend": time_spend,
+        "comment": comment
     }
 
-def get_account_id(email, access_token, cloud_id):
-    url = f"https://api.atlassian.com/ex/jira/{cloud_id}.atlassian.net/rest/api/3/user/search?query={email}"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
-    response = requests.get(url, headers=headers)
-    users = response.json()
-    if users:
-        return users[0].get("accountId")
+# def get_account_id(email, access_token, cloud_id):
+#     url = f"https://api.atlassian.com/ex/jira/{cloud_id}.atlassian.net/rest/api/3/user/search?query={email}"
+#     headers = {
+#         "Authorization": f"Bearer {access_token}",
+#         "Accept": "application/json"
+#     }
+#     response = requests.get(url, headers=headers)
+#     users = response.json()
+#     if users:
+#         return users[0].get("accountId")
+#     return None
+
+def normalize(text):
+    if not text:
+        return ""
+    return unicodedata.normalize("NFKD", text).casefold().strip()
+
+def get_account_id(jira, project_key, assignee_email=None, assignee_displayname=None):
+    users = jira.get_all_assignable_users_for_project(project_key, start=0, limit=100)
+
+    for user in users:
+        display_name = user.get("displayName", "")
+        email = user.get("emailAddress", "")
+        account_id = user.get("accountId")
+
+        if assignee_email and email and normalize(email) == normalize(assignee_email):
+            return account_id
+
+        if assignee_displayname and normalize(display_name) == normalize(assignee_displayname):
+            return account_id
+
     return None
 
-def create_issue(access_token, cloud_id, project_key, summary, description, issue_type="Task", assignee_email=None):
+def create_issue(access_token, cloud_id, domain, project_key, summary, description, issue_type="Task", assignee_displayname=None, assignee_email=None):
     jira = get_jira_client(access_token, cloud_id)
     
     fields = {
@@ -154,23 +187,49 @@ def create_issue(access_token, cloud_id, project_key, summary, description, issu
     }
     
     assignee_id = None
-    if assignee_email:
-        assignee_id = get_account_id(assignee_email, access_token, cloud_id)
+    if assignee_email or assignee_displayname:
+        assignee_id = get_account_id(jira, project_key, assignee_email, assignee_displayname)
 
     if assignee_id:
         fields["assignee"] = {"accountId": assignee_id}
-    
+
     issue = jira.create_issue(fields=fields)
     
     return {
-        "issue_id": getattr(issue, "id", None),
-        "issue_key": getattr(issue, "key", None),
-        "issue_url": f"https://{cloud_id}.atlassian.net/browse/{getattr(issue, 'key', '')}",
+        "issue_id": issue.get("id", None),
+        "issue_key": issue.get("key", None),
+        "issue_url": f"https://{domain}.atlassian.net/browse/{issue.get('key', '')}",
         "summary": summary,
         "assignee_id": assignee_id,
+        "assignee_displayname": assignee_displayname,
         "issue_type": issue_type,
         "description": description,
-        "status": getattr(issue.fields, "status", {}).name if hasattr(issue, "fields") and hasattr(issue.fields, "status") else None,
+    }
+
+def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None, assignee_email=None):
+    jira = get_jira_client(access_token, cloud_id)
+    project_key = issue_key.split('-')[0]
+    
+    assignee_id = None
+    if assignee_email or assignee_displayname:
+        assignee_id = get_account_id(jira, project_key, assignee_email, assignee_displayname)
+
+    if assignee_id:
+        jira.assign_issue(issue_key, assignee_id)
+    else:
+        pass
+
+    issue = jira.issue(issue_key)
+
+    return {
+        "project_key": project_key,
+        "issue_id": issue.get("id", None),
+        "issue_key": issue.get("key", None),
+        "assignee_id": assignee_id,
+        "assignee_displayname": assignee_displayname,
+        "summary": issue.get("fields", {}).get("summary", None),
+        "description": issue.get("fields", {}).get("description", None),
+        "issue_type": issue.get("fields", {}).get("issuetype", {}).get("name", None),
     }
 
 def transition_issue(access_token, cloud_id, issue_key, transition_name):
@@ -191,12 +250,56 @@ def transition_issue(access_token, cloud_id, issue_key, transition_name):
         "assignee": assignee_name,
     }
 
+def get_comments(access_token, cloud_id, issue_key):
+    jira = get_jira_client(access_token, cloud_id)
+    comments = jira.issue_get_comments(issue_key)
+
+    if isinstance(comments, str):
+        comments_data = json.loads(comments)
+    else:
+        comments_data = comments
+
+    comments = comments_data.get("comments", [])
+    
+    formatted_comments = []
+    for c in comments:
+        formatted_comments.append({
+            "id": c.get("id"),
+            "author": c.get("author", {}).get("displayName"),
+            "body": c.get("body"),
+            "created": c.get("created"),
+            "updated": c.get("updated")
+        })
+
+    return formatted_comments
+
+
+def add_comment(access_token, cloud_id, issue_key, comment):
+    jira = get_jira_client(access_token, cloud_id)
+    comment_obj = jira.issue_add_comment(issue_key, comment)
+    comment_id = comment_obj.get('id') if isinstance(comment_obj, dict) else getattr(comment_obj, 'id', None)
+    return {
+        "issue_key": issue_key,
+        "comment_id": comment_id,
+        "comment": comment,
+    }
+
+def edit_comment(access_token, cloud_id, issue_key, comment_id, new_comment, visibility=None, notify_users=True):
+    jira = get_jira_client(access_token, cloud_id)
+    jira.issue_edit_comment(issue_key, comment_id, new_comment, visibility=visibility, notify_users=notify_users)
+    return {
+        "issue_key": issue_key,
+        "comment_id": comment_id,
+        "new_comment": new_comment,
+    }
+
 def main():
-    access_token = "eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiJhZGFkNjU2YS04YTVkLTRkODQtOTFmOS0zMjExMDViNDU5NDUiLCJzdWIiOiI3MTIwMjA6YjZkMTIyYzgtNWY2OC00N2EzLTkwMjUtMTQ4NDc5MTBkNTE4IiwibmJmIjoxNzQ4NDMwNDQ5LCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODQzMDQ0OSwiZXhwIjoxNzQ4NDM0MDQ5LCJhdWQiOiJ0VWc5VGpqYTRTSmEwTld5M0tBUGNjQXI0M3BiZGNIdSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9yZWZyZXNoX2NoYWluX2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUtNzEyMDIwOmI2ZDEyMmM4LTVmNjgtNDdhMy05MDI1LTE0ODQ3OTEwZDUxOC1kNGM1NWQ5Ni1kOGY1LTQ4ZGItOGQzYy03Mjg1M2JjYmVhY2QiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vYXRsX3Rva2VuX3R5cGUiOiJBQ0NFU1MiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vc2Vzc2lvbl9pZCI6IjZmNDQyNDlhLTg3M2EtNGZlOC05YzI1LWEzMDcxY2EwYTNmNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9maXJzdFBhcnR5IjpmYWxzZSwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJjbGllbnRfaWQiOiJ0VWc5VGpqYTRTSmEwTld5M0tBUGNjQXI0M3BiZGNIdSIsInNjb3BlIjoibWFuYWdlOmppcmEtcHJvamVjdCBvZmZsaW5lX2FjY2VzcyByZWFkOmFjY291bnQgcmVhZDpqaXJhLXVzZXIgcmVhZDpqaXJhLXdvcmsgcmVhZDptZSB3cml0ZTpqaXJhLXdvcmsiLCJ2ZXJpZmllZCI6InRydWUiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcHJvY2Vzc1JlZ2lvbiI6InVzLXdlc3QtMiIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9lbWFpbERvbWFpbiI6ImdtYWlsLmNvbSIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50RW1haWwiOiI3NjMzZTM0Mi1jNGM3LTRhZjEtODQ1NC0zMzIzMGExNWUzNDVAY29ubmVjdC5hdGxhc3NpYW4uY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tLzNsbyI6dHJ1ZSwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3J0aSI6IjhiZDNmNGUyLTg4MDEtNDQ2Yy1iMTcwLTBkODRmMDNiN2UxNSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS91anQiOiJjMDBhZDBlMy0yYTQ0LTQxNDItYjhkMy1mZmFkMTdiMTc0NjUiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdmVyaWZpZWQiOnRydWUsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9vYXV0aENsaWVudElkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsRG9tYWluIjoiY29ubmVjdC5hdGxhc3NpYW4uY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRJZCI6IjcxMjAyMDo4YjY0NzEwOS01YzM1LTRmNDEtYTE2OS00NzcxOTE4ZDEyNTAifQ.a9_CqLu0iVxs_yGiIc5Qxn1s0-QuJb43JA13AfzSmYgk6miW9kae2TntwfudpvI4sO2rJ7NVZWy-OnSnjjZeSlaL0-ISaO96MtonA29rcpz_pvnb8BS__wnL1eDi2e676DUjVKC4RjYonO-w7_e5nMapTXVjTttjlbNIczXdIk9zuWGQIf-xdxUa7mtNWJ8AJEI5wBi8EqnPSl1JRqWOIlBoBnqgy22nemB2DwM3wxvWF4i4R0xtiyF8glhl32CyX9_eZTc_EWKMdJBxLxf2GGPjz5pgyFT6sViEzK2qLzyt2EnZAV_mTw4DVHBfE4N95WjDDwehN26nry_F2F4NGw"
+    access_token = "eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiIxMjU3ZmEwZS1hYmFlLTRmNTUtYmY5Ny05MTk3NjU5YzlhMDUiLCJzdWIiOiI3MTIwMjA6YjZkMTIyYzgtNWY2OC00N2EzLTkwMjUtMTQ4NDc5MTBkNTE4IiwibmJmIjoxNzQ4NTM0NzYwLCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODUzNDc2MCwiZXhwIjoxNzQ4NTM4MzYwLCJhdWQiOiJ0VWc5VGpqYTRTSmEwTld5M0tBUGNjQXI0M3BiZGNIdSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9yZWZyZXNoX2NoYWluX2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUtNzEyMDIwOmI2ZDEyMmM4LTVmNjgtNDdhMy05MDI1LTE0ODQ3OTEwZDUxOC03NDJjNzQzMC1lYjg0LTQxZDItYjE5Mi1jZDg1MzVhZjBhZDIiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdWp0IjoiMDc4ZDk1NzYtNTIxOC00YzZiLWJlYWItNWY1MTRkMTc4YTE5IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL2F0bF90b2tlbl90eXBlIjoiQUNDRVNTIiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Nlc3Npb25faWQiOiI2ZjQ0MjQ5YS04NzNhLTRmZTgtOWMyNS1hMzA3MWNhMGEzZjQiLCJodHRwczovL2F0bGFzc2lhbi5jb20vZmlyc3RQYXJ0eSI6ZmFsc2UsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS92ZXJpZmllZCI6dHJ1ZSwiY2xpZW50X2lkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJzY29wZSI6Im1hbmFnZTpqaXJhLXByb2plY3Qgb2ZmbGluZV9hY2Nlc3MgcmVhZDphY2NvdW50IHJlYWQ6amlyYS11c2VyIHJlYWQ6amlyYS13b3JrIHJlYWQ6bWUgd3JpdGU6amlyYS13b3JrIiwidmVyaWZpZWQiOiJ0cnVlIiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Byb2Nlc3NSZWdpb24iOiJ1cy13ZXN0LTIiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcnRpIjoiNGEwOTg0YjktMGExMC00YzM0LTg1NTQtNmRjNzgyZjM0NjE1IiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL2VtYWlsRG9tYWluIjoiZ21haWwuY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRFbWFpbCI6Ijc2MzNlMzQyLWM0YzctNGFmMS04NDU0LTMzMjMwYTE1ZTM0NUBjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vM2xvIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vdmVyaWZpZWQiOnRydWUsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9vYXV0aENsaWVudElkIjoidFVnOVRqamE0U0phME5XeTNLQVBjY0FyNDNwYmRjSHUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsRG9tYWluIjoiY29ubmVjdC5hdGxhc3NpYW4uY29tIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3N5c3RlbUFjY291bnRJZCI6IjcxMjAyMDo4YjY0NzEwOS01YzM1LTRmNDEtYTE2OS00NzcxOTE4ZDEyNTAifQ.MIgNlPvxOhCxyB8qX9DC3wItm8eBYr_Pnj1smfJrrRUfKB4w74djcPeCjcAz9IOCdfa8SGJUQGqlzw3lFAh7rovZe7cWsQQCwvmaGV6tuMizO_CQAURCpImY7PJeli-s75-Z4Y4qP75z3bLPBeyMnzRC3dsMY4V-iVLEFZ1LhWHdG_HC54Mdi0LGQao0_vFHBPkcrCvfb5RXjzg6pgySPM-qz3NEu6WP0Xyk4qoydm0VOYy6YlfixsON9fqtiWdDNuNGuxDzUSDAE5lzEwwNZwqhOH4BX8d82810SMmW_MF963-5NrklUWgk5ufukBwE7j3jnNGC7WZMRtQnvUWW9g"
     cloud_id = "ddd063d1-c577-4b9d-8271-d902cc0bd792"
+    domain = "stu-team"
     
     try:
-        issue = transition_issue(access_token, cloud_id, "SCRUM-177", "Done")
+        issue = get_worklogs(access_token, cloud_id, "SCRUM-6")
         print(issue)
     except Exception as e:
         print("Lỗi khi lấy issue:", str(e))

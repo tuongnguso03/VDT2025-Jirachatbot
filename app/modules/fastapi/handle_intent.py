@@ -60,3 +60,27 @@ def get_access_token(user_id: int) -> str:
         return user.accessToken
     finally:
         session.close()
+
+def get_cloud_id(user_id: int) -> str:
+    session = SessionLocal()
+    try:
+        user = session.query(User).filter_by(userId=user_id).first()
+        if not user:
+            raise Exception(f"User {user_id} not found")
+        if not user.cloudId:
+            raise Exception("User has no cloud ID stored")
+        return user.cloudId
+    finally:
+        session.close()
+
+def get_domain(user_id: int) -> str:
+    session = SessionLocal()
+    try:
+        user = session.query(User).filter_by(userId=user_id).first()
+        if not user:
+            raise Exception(f"User {user_id} not found")
+        if not user.domain:
+            raise Exception("User has no domain stored")
+        return user.domain
+    finally:
+        session.close()

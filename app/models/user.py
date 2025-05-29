@@ -11,6 +11,7 @@ class User(Base):
     accessToken = Column(String, nullable=True)
     refreshToken = Column(String, nullable=True)
     cloudId = Column(String, nullable=True) 
+    domain = Column(String, nullable=True)
     expiredAt = Column(TIMESTAMP, nullable=True) 
     createdAt = Column(TIMESTAMP, server_default=func.now())
     updatedAt = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
