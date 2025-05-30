@@ -5,7 +5,7 @@ from database import SessionLocal
 from modules.fastapi.config import get_jira_auth_url
 import json
 import asyncio
-from modules.chatbot.chatbot import chat_function, confluence_function, reformat_chat_history
+from modules.chatbot.chatbot import ChatAgent
 import logging
 import traceback
 
@@ -62,10 +62,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": msg.role, "message": msg.message} for msg in recent_messages
             ]
 
-            chat_history = reformat_chat_history(formatted_conversation)
+            agent = ChatAgent(user_id=user.userId)
+            # chat_history = reformat_chat_history(formatted_conversation)
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: chat_function(user_text, chat_history=chat_history, user_id=user.userId)
+                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation, functions=[agent.get_jira_issue_info, 
+                                                                                                             agent.get_confluence_page_info])
             )
 
             reply_text = response.candidates[0].content.parts[0].text
