@@ -20,6 +20,7 @@ class ChatAgent:
     
     def __init__(self, user_id: str):
         self.user_id = user_id
+        self.functions = [self.get_confluence_page_info, self.get_jira_issue_info]
 
 
     def get_jira_issue_info(self, issue_id: str):
@@ -131,7 +132,15 @@ class ChatAgent:
                     if isinstance(f, GeminiFunction) or callable(f)
                 ]
             })
-        else: config = None
+        else: 
+            # Prepare the tools from the GeminiFunction objects
+            config.update({
+                "tools": [
+                    f.get_tool() if isinstance(f, GeminiFunction) else f
+                    for f in self.functions
+                    if isinstance(f, GeminiFunction) or callable(f)
+                ]
+            })
         
         if chat_history and type(chat_history[0]) != genai_types.Content:
             chat_history = ChatAgent.reformat_chat_history(chat_history)
