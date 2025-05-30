@@ -2,16 +2,16 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from models import User, Message
 from database import SessionLocal
-from modules.fastapi.config import get_jira_auth_url
+from modules.fastapi.config import get_jira_auth_url, BOT_TOKEN
 import json
 import asyncio
 from modules.chatbot.chatbot import chat_function, confluence_function, reformat_chat_history
 import logging
 import traceback
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
@@ -79,5 +79,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in handle_message: {e}")
         logger.error(traceback.format_exc())
         await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
+    finally:
+        session.close()
+
+def send_telegram_message(chat_id: str, text: str):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    response = requests.post(url, json=payload)
+
+    if not response.ok:
+        print(f"Telegram error: {response.text}")
+        return
+
+    session = SessionLocal()
+    try:
+        user = session.query(User).filter_by(telegramId=chat_id).first()
+        if user:
+            msg_bot = Message(userId=user.userId, role="bot", message=text)
+            session.add(msg_bot)
+            session.commit()
+    except Exception as e:
+        logger.error(f"Error saving bot message: {e}")
     finally:
         session.close()

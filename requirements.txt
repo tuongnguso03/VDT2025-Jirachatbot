@@ -8,3 +8,4 @@ sqlalchemy
 APScheduler
 python-dotenv
 aiohttp
+pytz
