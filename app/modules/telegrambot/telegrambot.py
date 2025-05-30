@@ -62,11 +62,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": msg.role, "message": msg.message} for msg in recent_messages
             ]
 
-            agent = ChatAgent(user_id=user.userId)
+            agent = ChatAgent(user_id=user.userId, access_token=user.accessToken, cloud_id=user.cloudId, domain=user.domain)
             # chat_history = reformat_chat_history(formatted_conversation)
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation, functions=[agent.get_jira_issue_info, 
+                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation, functions=[agent.get_jira_issues,
+                                                                                                             agent.get_jira_issues_today,
+                                                                                                             agent.get_jira_issue_detail, 
                                                                                                              agent.get_confluence_page_info])
             )
 

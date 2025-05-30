@@ -1,11 +1,11 @@
 from google import genai
 from google.genai import types as genai_types
-from utils.function_declaration import GeminiFunction, confluence_function
+from .utils.function_declaration import GeminiFunction
 import os
 from dotenv import load_dotenv
 from typing import List, Dict
-
-import asyncio
+from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail
+import json
 # Only run this block for Gemini Developer API
 load_dotenv()
 
@@ -18,25 +18,102 @@ class ChatAgent:
     model = "gemini-2.0-flash"
     config = {"temperature": 0}
     
-    def __init__(self, user_id: str):
+    def __init__(self, user_id: str, access_token: str, cloud_id: str, domain: str):
         self.user_id = user_id
-        self.functions = [self.get_confluence_page_info, self.get_jira_issue_info]
+        self.access_token = access_token
+        self.cloud_id = cloud_id
+        self.domain = domain
+        self.functions = [self.get_jira_issues, self.get_jira_issues_today, self.get_confluence_page_info, self.get_jira_issue_detail]
 
-
-    def get_jira_issue_info(self, issue_id: str):
+    def get_jira_issues(self):
         """
-        Get a Jira issue from the ID.
+        Lấy ra danh sách tasks (công việc) của người dùng
         
-        This function takes an ID of a Jira issue, and returns the information of such issue.
-        
-        Args:
-            issue_id (str): ID of the required issue. Can include numbers or characters.
+        Hàm này trả về thông tin danh sách tasks (công việc) của người dùng đó.
 
-        Returns:
-            A string contains the details from the issue required.
+        Trả về:
+            Một list chuỗi chứa thông tin danh sách tasks được yêu cầu.
         """
-        ###DUMMY
-        return f"The secret code is {self.user_id}-{issue_id}. Get more information, including the super super secret code, from the page APTX4869"
+        result = get_all_issues(self.access_token, self.cloud_id)
+
+        if not result:
+            return "🎉 Bạn không có công việc nào đang xử lý!"
+
+        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
+
+        for idx, issue in enumerate(result, start=1):
+            key = issue.get("key", "N/A")
+            summary = issue.get("summary", "Không có tiêu đề")
+            status = issue.get("status", "Không rõ trạng thái")
+            deadline = issue.get("deadline", "Chưa có hạn")
+
+            formatted += (
+                f"{idx}. *{key}* - {summary}\n"
+                f"    - Trạng thái: `{status}`\n"
+                f"    - Deadline: {deadline}\n\n"
+            )
+
+        return formatted
+
+    def get_jira_issues_today(self):
+        """
+        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm này
+        
+        Hàm này trả về thông tin danh sách tasks (công việc) của người dùng đó ngày hôm nay.
+
+        Trả về:
+            Một list chuỗi chứa thông tin danh sách tasks được yêu cầu.
+        """
+        result = get_today_issues(self.access_token, self.cloud_id)
+
+        if not result:
+            return "🎉 Bạn không có công việc nào đang xử lý!"
+
+        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
+
+        for idx, issue in enumerate(result, start=1):
+            key = issue.get("key", "N/A")
+            summary = issue.get("summary", "Không có tiêu đề")
+            status = issue.get("status", "Không rõ trạng thái")
+            deadline = issue.get("deadline", "Chưa có hạn")
+
+            formatted += (
+                f"{idx}. *{key}* - {summary}\n"
+                f"    - Trạng thái: `{status}`\n"
+                f"    - Deadline: {deadline}\n\n"
+            )
+
+        return formatted
+
+    def get_jira_issue_detail(self, issue_key: str):
+        """
+        Lấy ra chi tiết của một task từ issue_key
+        
+        Hàm này nhận vào key của một issue trong Jira và trả về thông tin chi tiết của issue đó.
+
+        Tham số:
+            issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
+
+        Trả về:
+            Một chuỗi chứa thông tin chi tiết của issue được yêu cầu.
+        """
+        result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
+
+        formatted = (
+            f"   - Dự án: {result.get('project', '')}"
+            f"   - Jira Issue: {result.get('key', '')}\n"
+            f"   - Tóm tắt: {result.get('summary', '')}\n"
+            f"   - Mô tả: {result.get('description', '')}\n"
+            f"   - Tạo lúc: {result.get('created', '')}\n"
+            f"   - Cập nhật: {result.get('updated', '')}\n"
+            f"   - Deadline: {result.get('duedate', 'Không có')}\n"
+            f"   - Trạng thái: {result.get('status', '')}\n"
+            f"   - Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
+            f"   - Người tạo: {result.get('reporter', '')}\n"
+            f"   - Mức độ ưu tiên: {result.get('priority', '')}\n"
+        ) 
+
+        return formatted
     
     def get_confluence_page_info(self, page_id: str):
         """
@@ -179,7 +256,7 @@ if __name__ == "__main__":
                                                       chat_history=raw_chat_history, 
                                                       functions=[
                                                           chat_agent.get_confluence_page_info, 
-                                                          chat_agent.get_jira_issue_info
+                                                          chat_agent.get_jira_issue_detail
                                                       ])
     print(response.candidates[0].content.parts[0].text)
     # print("###################################")
@@ -189,7 +266,7 @@ if __name__ == "__main__":
                                                       chat_history=chat_history, 
                                                       functions=[
                                                           chat_agent.get_confluence_page_info, 
-                                                          chat_agent.get_jira_issue_info
+                                                          chat_agent.get_jira_issue_detail
                                                       ])
     print(response.candidates[0].content.parts[0].text)
     print("###################################")
