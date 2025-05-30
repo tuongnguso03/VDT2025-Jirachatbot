@@ -47,6 +47,8 @@ services:
     ports:
       - "8000:8000"
     restart: always
+    volumes:
+      - ./app:/app/app
     env_file:
       - .env
     depends_on:
@@ -58,6 +60,8 @@ services:
     build: .
     container_name: telegram-bot
     command: python bot_runner.py 
+    volumes:
+      - ./app:/app/app
     env_file:
       - .env
     depends_on:
