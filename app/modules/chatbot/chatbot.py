@@ -57,7 +57,7 @@ class ChatAgent:
 
     def get_jira_issues_today(self):
         """
-        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm này
+        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm nay.
         
         Hàm này trả về thông tin danh sách tasks (công việc) của người dùng đó ngày hôm nay.
 
@@ -114,6 +114,36 @@ class ChatAgent:
         ) 
 
         return formatted
+    
+    # def get_jira_issue_detail(self, issue_key: str):
+    #     """
+    #     Lấy ra chi tiết của một task từ issue_key
+        
+    #     Hàm này nhận vào key của một issue trong Jira và trả về thông tin chi tiết của issue đó.
+
+    #     Tham số:
+    #         issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
+
+    #     Trả về:
+    #         Một chuỗi chứa thông tin chi tiết của issue được yêu cầu.
+    #     """
+    #     result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
+
+    #     formatted = (
+    #         f"   - Dự án: {result.get('project', '')}"
+    #         f"   - Jira Issue: {result.get('key', '')}\n"
+    #         f"   - Tóm tắt: {result.get('summary', '')}\n"
+    #         f"   - Mô tả: {result.get('description', '')}\n"
+    #         f"   - Tạo lúc: {result.get('created', '')}\n"
+    #         f"   - Cập nhật: {result.get('updated', '')}\n"
+    #         f"   - Deadline: {result.get('duedate', 'Không có')}\n"
+    #         f"   - Trạng thái: {result.get('status', '')}\n"
+    #         f"   - Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
+    #         f"   - Người tạo: {result.get('reporter', '')}\n"
+    #         f"   - Mức độ ưu tiên: {result.get('priority', '')}\n"
+    #     ) 
+
+    #     return formatted
     
     def get_confluence_page_info(self, page_id: str):
         """
