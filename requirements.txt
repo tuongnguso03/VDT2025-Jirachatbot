@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 python-telegram-bot
+python-telegram-bot[webhooks]
 atlassian-python-api
 google-genai
 psycopg2-binary

@@ -4,7 +4,7 @@ from .utils.function_declaration import GeminiFunction
 import os
 from dotenv import load_dotenv
 from typing import List, Dict
-from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail
+from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment
 import json
 # Only run this block for Gemini Developer API
 load_dotenv()
@@ -23,7 +23,19 @@ class ChatAgent:
         self.access_token = access_token
         self.cloud_id = cloud_id
         self.domain = domain
-        self.functions = [self.get_jira_issues, self.get_jira_issues_today, self.get_confluence_page_info, self.get_jira_issue_detail]
+        self.functions = [
+            self.get_jira_issues, 
+            self.get_jira_issues_today, 
+            self.get_jira_issue_detail,
+            self.get_jira_log_works,
+            self.create_jira_log_work,
+            self.create_jira_issue,
+            self.assign_jira_issue,
+            self.transition_jira_issue,
+            self.get_jira_comments,
+            self.create_jira_comment,
+            self.edit_jira_comment,
+            self.get_confluence_page_info]
 
     def get_jira_issues(self):
         """
@@ -44,11 +56,13 @@ class ChatAgent:
         for idx, issue in enumerate(result, start=1):
             key = issue.get("key", "N/A")
             summary = issue.get("summary", "Không có tiêu đề")
+            type = issue.get("type", "N/A")
             status = issue.get("status", "Không rõ trạng thái")
             deadline = issue.get("deadline", "Chưa có hạn")
 
             formatted += (
                 f"{idx}. *{key}* - {summary}\n"
+                f"    - Loại: {type}\n"
                 f"    - Trạng thái: `{status}`\n"
                 f"    - Deadline: {deadline}\n\n"
             )
@@ -74,11 +88,13 @@ class ChatAgent:
         for idx, issue in enumerate(result, start=1):
             key = issue.get("key", "N/A")
             summary = issue.get("summary", "Không có tiêu đề")
+            type = issue.get("type", "N/A")
             status = issue.get("status", "Không rõ trạng thái")
             deadline = issue.get("deadline", "Chưa có hạn")
 
             formatted += (
                 f"{idx}. *{key}* - {summary}\n"
+                f"    - Loại: {type}\n"
                 f"    - Trạng thái: `{status}`\n"
                 f"    - Deadline: {deadline}\n\n"
             )
@@ -104,8 +120,7 @@ class ChatAgent:
             f"   - Jira Issue: {result.get('key', '')}\n"
             f"   - Tóm tắt: {result.get('summary', '')}\n"
             f"   - Mô tả: {result.get('description', '')}\n"
-            f"   - Tạo lúc: {result.get('created', '')}\n"
-            f"   - Cập nhật: {result.get('updated', '')}\n"
+            f"   - Loại: {result.get('type', '')}\n"
             f"   - Deadline: {result.get('duedate', 'Không có')}\n"
             f"   - Trạng thái: {result.get('status', '')}\n"
             f"   - Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
@@ -115,35 +130,229 @@ class ChatAgent:
 
         return formatted
     
-    # def get_jira_issue_detail(self, issue_key: str):
-    #     """
-    #     Lấy ra chi tiết của một task từ issue_key
-        
-    #     Hàm này nhận vào key của một issue trong Jira và trả về thông tin chi tiết của issue đó.
+    def get_jira_log_works(self, issue_key: str):
+        """
+        Lấy ra danh sách worklog của một task từ issue_key
 
-    #     Tham số:
-    #         issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
+        Hàm này nhận vào key của một issue trong Jira và trả về danh sách worklog cho issue đó.
 
-    #     Trả về:
-    #         Một chuỗi chứa thông tin chi tiết của issue được yêu cầu.
-    #     """
-    #     result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
+        Tham số:
+            issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
 
-    #     formatted = (
-    #         f"   - Dự án: {result.get('project', '')}"
-    #         f"   - Jira Issue: {result.get('key', '')}\n"
-    #         f"   - Tóm tắt: {result.get('summary', '')}\n"
-    #         f"   - Mô tả: {result.get('description', '')}\n"
-    #         f"   - Tạo lúc: {result.get('created', '')}\n"
-    #         f"   - Cập nhật: {result.get('updated', '')}\n"
-    #         f"   - Deadline: {result.get('duedate', 'Không có')}\n"
-    #         f"   - Trạng thái: {result.get('status', '')}\n"
-    #         f"   - Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
-    #         f"   - Người tạo: {result.get('reporter', '')}\n"
-    #         f"   - Mức độ ưu tiên: {result.get('priority', '')}\n"
-    #     ) 
+        Trả về:
+            Một chuỗi chứa thông tin worklog.
+        """
+        result = get_worklogs(self.access_token, self.cloud_id, issue_key)
+        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
 
-    #     return formatted
+        for idx, issue in enumerate(result, start=1):
+            id = issue.get("id", "N/A")
+            author = issue.get("author", "N/A")
+            time_spent = issue.get("time_spent", "N/A")
+            started = issue.get("started", "N/A")
+            comment = issue.get("comment", "Không có comment")
+
+            formatted += (
+                f"- WorklogID: {id}\n"
+                f"- Người log work: {author}\n"
+                f"- Thời gian làm việc: {time_spent}\n"
+                f"- Thời gian bắt đầu làm: {started}\n"
+                f"- Comment: {comment}\n"
+            )
+
+        return formatted
+
+    def create_jira_log_work(self, issue_key: str, time_spend: int, comment: str, date: str):
+        """
+        Log work cho một task từ issue_key, time_spend, comment, date
+
+        Hàm này nhận vào key của một issue trong Jira, ngày, thời gian làm việc và bình luận, và trả về thông tin chi tiết của log work cho issue đó.
+
+        Tham số:
+            issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
+            date (str): Ngày log work, định dạng linh hoạt (YYYY-MM-DD HH:MM, hoặc chỉ HH:MM hoặc rỗng).
+            time_spend (int): Thời gian làm việc - làm trong bao nhiêu phút.
+            comment (str): Bình luận cho log work.
+
+        Trả về:
+            Một chuỗi chứa thông tin worklog sau khi log work.
+        """
+        result = log_work(self.access_token, self.cloud_id, issue_key, time_spend, comment, date)
+
+        formatted = (
+            f"- Jira Issue: {result.get('issue_key', '')}\n"
+            f"- WorklogID: {result.get('id', '')}\n"
+            f"- Người log work: {result.get('author', '')}\n"
+            f"- Thời gian làm việc: {result.get('time_spend', '')}\n"
+            f"- Thời gian bắt đầu làm: {result.get('started', '')}\n"
+            f"- Comment: {result.get('comment', 'Không có')}\n"
+        ) 
+
+        return formatted
+    
+    def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str):
+        """
+        Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname, due_date
+
+        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, displayname của người được giao task.
+
+        Tham số:
+            project_key (str): Key của project muốn tạo issue mới. Có thể bao gồm cả chữ và số.
+            summary (str): Tóm tắt issue.
+            description (str): Mô tả issue.
+            issue_type (str): Loại issue, không nói gì mặc định là Task.
+            due_date (str): Ngày đến hạn deadline, có thể rỗng.
+            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này, có thể rỗng.
+
+        Trả về:
+            Một chuỗi chứa thông tin task sau khi tạo task.
+        """
+        result = create_issue(self.access_token, self.cloud_id, self.domain, project_key, summary, description, issue_type, due_date, assignee_displayname)
+
+        formatted = (
+            f"- Project Key: {project_key}\n"
+            f"- Issue Id: {result.get('issue_id', '')}\n"
+            f"- Issue Key: {result.get('issue_key', '')}\n"
+            f"- Link Issue: {result.get('issue_url', '')}\n"
+            f"- Tóm tắt: {result.get('summary', '')}\n"
+            f"- Mô tả: {result.get('description', '')}\n"
+            f"- Loại: {result.get('issue_type', '')}\n"
+            f"- Ngày đến hạn: {result.get('due_date', 'N/A')}\n"
+            f"- AssigneeId: {result.get('assignee_id', 'Không có')}\n"
+            f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
+        ) 
+
+        return formatted
+
+    def assign_jira_issue(self, issue_key: str, assignee_displayname: str):
+        """
+        Giao task cho user từ issue_key, assignee_displayname
+
+        Hàm này nhận vào key của một issue trong Jira cùng displayname của người được giao task.
+
+        Tham số:
+            issue_key (str): Key của issue muốn giao task. Có thể bao gồm cả chữ và số.
+            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này.
+
+        Trả về:
+            Một chuỗi chứa thông tin sau khi giao task.
+        """
+        result = assign_issue(self.access_token, self.cloud_id, issue_key, assignee_displayname)
+
+        formatted = (
+            f"- Project Key: {result.get('project_key', '')}\n"
+            f"- Issue Key: {result.get('issue_key', '')}\n"
+            f"- Tóm tắt: {result.get('summary', '')}\n"
+            f"- Mô tả: {result.get('description', '')}\n"
+            f"- Loại: {result.get('issue_type', '')}\n"
+            f"- Ngày đến hạn: {result.get('due_date', 'N/A')}\n"
+            f"- AssigneeId: {result.get('assignee_id', 'Không có')}\n"
+            f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
+        ) 
+
+        return formatted
+
+    def transition_jira_issue(self, issue_key: str, transition_name: str):
+        """
+        Chuyển trạng thái cho task với issue_key sang transition_name
+
+        Hàm này nhận vào key của một issue trong Jira cùng transition_name của task.
+
+        Tham số:
+            issue_key (str): Key của issue muốn giao task. Có thể bao gồm cả chữ và số.
+            transition_name (str): Tên của trạng thái task.
+
+        Trả về:
+            Một chuỗi chứa thông tin sau khi chuyển trạng thái task.
+        """
+        result = transition_issue(self.access_token, self.cloud_id, issue_key, transition_name)
+
+        formatted = (
+            f"- Issue Key: {result.get('issue_key', '')}\n"
+            f"- Trạng thái: {result.get('status', '')}\n"
+            f"- Tóm tắt: {result.get('summary', '')}\n"
+            f"- Người đảm nhiệm: {result.get('assignee', 'Không có')}\n"
+        ) 
+
+        return formatted
+
+    def get_jira_comments(self, issue_key: str):
+        """
+        Lấy danh sách các bình luận (comments) của task với issue_key
+
+        Hàm này nhận vào key của một issue trong Jira.
+
+        Tham số:
+            issue_key (str): Key của issue muốn lấy comments. Có thể bao gồm cả chữ và số.
+
+        Trả về:
+            Một chuỗi chứa thông tin sau khi lấy danh sách comments.
+        """
+        result = get_comments(self.access_token, self.cloud_id, issue_key)
+        formatted = ""
+
+        for idx, issue in enumerate(result, start=1):
+            id = issue.get("id")
+            author = issue.get("author")
+            body = issue.get("body")
+            created = issue.get("created")
+            updated = issue.get("updated")
+
+            formatted += (
+                f"{idx}. *{id}* - {body}\n"
+                f"    - Người tạo: {author}\n"
+                f"    - Tạo lúc: `{created}`\n"
+                f"    - Chỉnh sửa lúc: {updated}\n\n"
+            )
+
+        return formatted
+    
+    def create_jira_comment(self, issue_key: str, comment: str):
+        """
+        Tạo bình luận (comment) mới của task từ issue_key và comment
+
+        Hàm này nhận vào key của một issue trong Jira và comment cho issue đó.
+
+        Tham số:
+            issue_key (str): Key của issue muốn comment. Có thể bao gồm cả chữ và số.
+            comment (str): Nội dung bình luận (comment)
+
+        Trả về:
+            Một chuỗi chứa thông tin sau khi tạo comment cho issue.
+        """
+        result = add_comment(self.access_token, self.cloud_id, issue_key, comment)
+
+        formatted = (
+            f"- Issue Key: {result.get('issue_key', '')}\n"
+            f"- Comment ID: {result.get('comment_id', '')}\n"
+            f"- Nội dung: {result.get('comment', '')}\n"
+        ) 
+
+        return formatted
+    
+    def edit_jira_comment(self, issue_key: str, comment_id: int, new_comment: str):
+        """
+        Chỉnh sửa bình luận (comment) - comment_id của task issue_key với nội dung mới new_comment
+
+        Hàm này nhận vào key của một issue trong Jira, comment_id và comment cho issue đó.
+
+        Tham số:
+            issue_key (str): Key của issue muốn comment. Có thể bao gồm cả chữ và số.
+            comment_id (int): Comment id muốn chỉnh sửa
+            new_comment (str): Nội dung comment mới
+
+        Trả về:
+            Một chuỗi chứa thông tin sau khi chỉnh sửa comment.
+        """
+        result = edit_comment(self.access_token, self.cloud_id, issue_key, comment_id, new_comment)
+
+        formatted = (
+            f"- Issue Key: {result.get('issue_key', '')}\n"
+            f"- Comment ID: {result.get('comment_id', '')}\n"
+            f"- Nội dung: {result.get('new_comment', '')}\n"
+        ) 
+
+        return formatted
     
     def get_confluence_page_info(self, page_id: str):
         """

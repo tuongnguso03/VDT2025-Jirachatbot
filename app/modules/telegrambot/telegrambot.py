@@ -18,10 +18,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = SessionLocal()
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
-        user = User(
-            telegramId=telegram_id,
-            telegramUsername=update.effective_user.username
-        )
+        user = User(telegramId=telegram_id)
         session.add(user)
         session.commit()
 
@@ -51,7 +48,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 .limit(10)
                 .all()
             )
-            logger.info(f"[TelegramBot] Recent messages for user {user.userId}: {[{'role': m.role, 'message': m.message} for m in recent_messages]}")
 
             recent_messages.reverse()
 
@@ -75,6 +71,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         agent.get_jira_issues,
                         agent.get_jira_issues_today,
                         agent.get_jira_issue_detail,
+                        agent.get_jira_log_works,
+                        agent.create_jira_log_work,
+                        agent.create_jira_issue,
+                        agent.assign_jira_issue,
+                        agent.transition_jira_issue,
+                        agent.get_jira_comments,
+                        agent.create_jira_comment,
+                        agent.edit_jira_comment,
                         agent.get_confluence_page_info
                     ]
                 )
