@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
     session = SessionLocal()
+    print("USERNAME:", update.effective_user.username)
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
         user = User(
