@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from typing import List, Dict
 from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail
+from modules.confluence.confluence_doc import get_page_by_id_v2, get_all_page_ids_and_titles_v2
 import json
 # Only run this block for Gemini Developer API
 load_dotenv()
@@ -23,7 +24,7 @@ class ChatAgent:
         self.access_token = access_token
         self.cloud_id = cloud_id
         self.domain = domain
-        self.functions = [self.get_jira_issues, self.get_jira_issues_today, self.get_confluence_page_info, self.get_jira_issue_detail]
+        self.functions = [self.get_jira_issues, self.get_jira_issues_today, self.get_confluence_page_info, self.get_jira_issue_detail, self.get_confluence_page_list]
 
     def get_jira_issues(self):
         """
@@ -117,18 +118,21 @@ class ChatAgent:
     
     def get_confluence_page_info(self, page_id: str):
         """
-        Get a Confluence page from the ID.
-        
-        This function takes an ID of a Confluence page, and returns the information of such issue.
+        Lấy ra chi tiết thông tin của một Confluence Page từ page_id, có chứa nội dung đầy đủ. Bên trong nội dung các page sẽ chứa các tài liệu cần thiết cho công việc.
         
         Args:
-            page_id (str): ID of the required page
+            page_id (str): ID của page cần lấy thông tin. Một danh sách các page (tên, kèm ID) có thể lấy được từ hàm get_confluence_page_list.
 
         Returns:
-            A string contains the information from the page required.
+             Một chuỗi chứa thông tin chi tiết, bao gồm nội dung của page được yêu cầu.
         """
-        ###DUMMY
-        return f"The code is {page_id}-{self.user_id}-PAGE-{page_id}"
+        return str(get_page_by_id_v2(self.access_token, self.cloud_id, page_id))
+    
+    def get_confluence_page_list(self):
+        """
+        Lấy ra ID và tên của các page chứa nội dung tài liệu có thể truy cập được trong Confluence. ID cần thiết để sử dụng get_confluence_page_info sẽ nằm ở đây.
+        """
+        return str(get_all_page_ids_and_titles_v2(self.access_token, self.cloud_id))
 
     def reformat_chat_history( 
             raw_chat_history: List[Dict[str, str]]
@@ -226,7 +230,7 @@ class ChatAgent:
                                 history = chat_history) #placeholder
         
         response = chat_object.send_message(new_message, config = config)
-
+        print("LOG:", chat_object._curated_history)
         return response, chat_object._curated_history
 
 

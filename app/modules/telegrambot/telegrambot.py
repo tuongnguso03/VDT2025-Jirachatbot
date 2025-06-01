@@ -67,10 +67,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # chat_history = reformat_chat_history(formatted_conversation)
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation, functions=[agent.get_jira_issues,
-                                                                                                             agent.get_jira_issues_today,
-                                                                                                             agent.get_jira_issue_detail, 
-                                                                                                             agent.get_confluence_page_info])
+                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation,)
             )
 
             reply_text = response.candidates[0].content.parts[0].text
