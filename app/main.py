@@ -15,7 +15,7 @@ def read_root():
 @app.on_event("startup")
 def on_startup():
     print("Database tables created (if not existed)")
-
+    
     Base.metadata.create_all(bind=engine)
 
 app.include_router(oauth_router)

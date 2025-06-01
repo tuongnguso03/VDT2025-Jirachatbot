@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
     session = SessionLocal()
+    print("USERNAME:", update.effective_user.username)
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
         user = User(telegramId=telegram_id)
@@ -68,24 +69,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: agent.chat_function(
-                    user_text,
-                    chat_history=formatted_conversation,
-                    functions=[
-                        agent.get_jira_issues,
-                        agent.get_jira_issues_today,
-                        agent.get_jira_issue_detail,
-                        agent.get_jira_log_works,
-                        agent.create_jira_log_work,
-                        agent.create_jira_issue,
-                        agent.assign_jira_issue,
-                        agent.transition_jira_issue,
-                        agent.get_jira_comments,
-                        agent.create_jira_comment,
-                        agent.edit_jira_comment,
-                        agent.get_confluence_page_info
-                    ]
-                )
+                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation,)
             )
 
             reply_text = response.candidates[0].content.parts[0].text
