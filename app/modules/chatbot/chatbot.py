@@ -4,8 +4,10 @@ from .utils.function_declaration import GeminiFunction
 import os
 from dotenv import load_dotenv
 from typing import List, Dict
-from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment
+from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment, add_attachment
 import json
+import requests
+import mimetypes
 # Only run this block for Gemini Developer API
 load_dotenv()
 
@@ -35,6 +37,7 @@ class ChatAgent:
             self.get_jira_comments,
             self.create_jira_comment,
             self.edit_jira_comment,
+            self.attach_file_to_jira_issue,
             self.get_confluence_page_info]
 
     def get_jira_issues(self):
@@ -353,6 +356,39 @@ class ChatAgent:
         ) 
 
         return formatted
+
+    def attach_file_to_jira_issue(self, message: str) -> str:
+        """
+        Đính kèm file vào Jira issue (tìm issue key từ message)
+
+        Args:
+            message (str): Tin nhắn chứa issue key (VD: "vui lòng đính kèm file vào VDT-123")
+
+        Returns:
+            str: Nội dung phản hồi người dùng
+        """
+        import re
+
+        # Lấy file từ self
+        file_path = getattr(self, "file_path", None)
+        filename = getattr(self, "filename", "file")
+
+        if not file_path:
+            return "⚠️ Không tìm thấy file để đính kèm."
+
+        # Tìm issue key trong message
+        match = re.search(r"[A-Z]+-\d+", message)
+        if not match:
+            return "⚠️ Không tìm thấy mã issue trong tin nhắn."
+
+        issue_key = match.group(0)
+
+        try:
+            return add_attachment(self.access_token, self.cloud_id, issue_key, file_path)
+        except Exception as e:
+            return f"❌ Gặp lỗi khi đính kèm file: {str(e)}"
+
+        
     
     def get_confluence_page_info(self, page_id: str):
         """
