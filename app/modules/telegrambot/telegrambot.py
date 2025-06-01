@@ -104,7 +104,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(reply_text)
 
             attachments_urls = []
-            match = re.search(r'Attachments:\s*(\[[^\]]*\])', reply_text)
+            match = re.search(r'Attachments:\s*(\[[\s\S]*?\])', reply_text)
             if match:
                 try:
                     attachments_urls = json.loads(match.group(1))
