@@ -6,6 +6,10 @@ import unicodedata
 import json
 import re
 import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_jira_client(access_token: str, cloud_id: str) -> Jira:
     """
@@ -25,7 +29,7 @@ def get_jira_client(access_token: str, cloud_id: str) -> Jira:
     return Jira(
         url=base_url,
         session=session,
-        cloud=True 
+        cloud=True
     )
 
 
@@ -89,6 +93,14 @@ def get_issue_detail(access_token, cloud_id, issue_key):
     issue = jira.issue(issue_key)
     fields = issue["fields"]
 
+    attachments = []
+    for attach in fields.get("attachment", []):
+        attachments.append({
+            "filename": attach.get("filename"),
+            "content_url": attach.get("content"),
+            "mime_type": attach.get("mimeType")
+        })
+
     return {
         "key": issue.get("key"),
         "summary": fields.get("summary"),
@@ -101,7 +113,8 @@ def get_issue_detail(access_token, cloud_id, issue_key):
         "updated": fields.get("updated"),
         "duedate": fields.get("duedate"),
         "priority": fields["priority"]["name"] if fields.get("priority") else None,
-        "project": fields["project"]["key"] if fields.get("project") else None
+        "project": fields["project"]["key"] if fields.get("project") else None,
+        "attachments": attachments
     }
 
 def get_worklogs(access_token, cloud_id, issue_key):
@@ -330,18 +343,25 @@ def edit_comment(access_token, cloud_id, issue_key, comment_id, new_comment, vis
         "new_comment": new_comment,
     }
 
+def add_attachment(token, cloud_id, issue_key, file_path, file_name):
+    url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue/{issue_key}/attachments"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Atlassian-Token": "no-check"
+    }
 
-def add_attachment(access_token, cloud_id, issue_key, file_path):
-    jira = get_jira_client(access_token, cloud_id)
+    files = {
+        "file": (file_name, open(file_path, "rb"))
+    }
 
-    try:
-        with open(file_path, "rb") as f:
-            jira.add_attachment_object(issue_key, f)
+    response = requests.post(url, headers=headers, files=files)
+    print(response.status_code, response.text)
 
-        return f" Đã đính kèm file vào issue `{issue_key}` thành công."
+    if response.status_code == 200 or response.status_code == 201:
+        return f"Đính kèm file vào `{issue_key}` thành công."
+    else:
+        return f"Không đính kèm được: {response.status_code} - {response.text}"
 
-    except Exception as e:
-        return f"❌ Lỗi khi upload file vào `{issue_key}`: {str(e)}"
     
 
 def main():

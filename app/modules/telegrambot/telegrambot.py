@@ -11,6 +11,9 @@ import traceback
 import requests
 import os
 import tempfile
+import aiohttp
+import io
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +21,6 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
     session = SessionLocal()
-    print("USERNAME:", update.effective_user.username)
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
         user = User(telegramId=telegram_id)
@@ -35,6 +37,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_msg, parse_mode='Markdown', disable_web_page_preview=True)
 
     session.close()
+
+
+async def download_and_send_jira_image(update, jira_url, headers=None):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(jira_url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                        tmp_file.write(data)
+                        tmp_file_path = tmp_file.name
+
+                    with open(tmp_file_path, "rb") as photo_file:
+                        await update.message.reply_photo(photo=photo_file, caption="Ảnh từ Jira")
+
+                    os.remove(tmp_file_path)
+                else:
+                    await update.message.reply_text(f"Không tải được ảnh từ Jira, status {resp.status}")
+    except Exception as e:
+        await update.message.reply_text(f"Lỗi khi tải ảnh từ Jira: {str(e)}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_chat.id
@@ -69,7 +91,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
-                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation,)
+                None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation)
             )
 
             reply_text = response.candidates[0].content.parts[0].text
@@ -81,13 +103,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await update.message.reply_text(reply_text)
 
+            attachments_urls = []
+            match = re.search(r'Attachments:\s*(\[[^\]]*\])', reply_text)
+            if match:
+                try:
+                    attachments_urls = json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+            for url in attachments_urls:
+                headers = {"Authorization": f"Bearer {user.accessToken}"} 
+                await download_and_send_jira_image(update, url, headers=headers)
+
     except Exception as e:
         logger.error(f"Error in handle_message: {e}")
         logger.error(traceback.format_exc())
         await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
     finally:
         session.close()
-
 
 def send_telegram_message(chat_id: str, text: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -144,7 +177,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             await telegram_file.download_to_drive(temp_file.name)
             file_path = temp_file.name
-            filename = getattr(file, 'file_name', 'attachment.png')
+            file_name = getattr(file, 'file_name', 'attachment.png')
 
         agent = ChatAgent(
             user_id=user.userId,
@@ -154,7 +187,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         agent.file_path = file_path
-        agent.filename = filename
+        agent.file_name = file_name
 
         message_to_process = caption if caption else previous_msg.message
 
@@ -169,11 +202,10 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply_text = response.candidates[0].content.parts[0].text
 
-        # Lưu tin nhắn caption hoặc mô tả gửi file
         msg_user = Message(
             userId=user.userId,
             role="user",
-            message=caption if caption else f"File gửi: {filename}"
+            message=caption if caption else f"File gửi: {file_name}"
         )
         msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
         session.add_all([msg_user, msg_bot])

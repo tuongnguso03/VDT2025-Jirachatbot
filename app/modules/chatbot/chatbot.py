@@ -6,14 +6,14 @@ from dotenv import load_dotenv
 from typing import List, Dict
 
 from modules.confluence.confluence_doc import get_page_by_id_v2, get_all_page_ids_and_titles_v2
-from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment
+from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment, add_attachment
 
 import json
 import requests
 import mimetypes
+import re
 # Only run this block for Gemini Developer API
 load_dotenv()
-
 
 class ChatAgent:
     """
@@ -116,26 +116,32 @@ class ChatAgent:
 
         Tham số:
             issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
-
-        Trả về:
-            Một chuỗi chứa thông tin chi tiết của issue được yêu cầu.
+            
+        Trả về dict gồm: thông tin mô tả issue dạng chuỗi
         """
         result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
 
+        
+        attachment_urls = [att.get("content_url") for att in result.get("attachments", []) if att.get("content_url")]
+
         formatted = (
-            f"   - Dự án: {result.get('project', '')}"
-            f"   - Jira Issue: {result.get('key', '')}\n"
-            f"   - Tóm tắt: {result.get('summary', '')}\n"
-            f"   - Mô tả: {result.get('description', '')}\n"
-            f"   - Loại: {result.get('type', '')}\n"
-            f"   - Deadline: {result.get('duedate', 'Không có')}\n"
-            f"   - Trạng thái: {result.get('status', '')}\n"
-            f"   - Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
-            f"   - Người tạo: {result.get('reporter', '')}\n"
-            f"   - Mức độ ưu tiên: {result.get('priority', '')}\n"
-        ) 
+            f"- Dự án: {result.get('project', '')}\n"
+            f"- Jira Issue: {result.get('key', '')}\n"
+            f"- Tóm tắt: {result.get('summary', '')}\n"
+            f"- Mô tả: {result.get('description', '')}\n"
+            f"- Loại: {result.get('type', '')}\n"
+            f"- Deadline: {result.get('duedate', 'Không có')}\n"
+            f"- Trạng thái: {result.get('status', '')}\n"
+            f"- Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
+            f"- Người tạo: {result.get('reporter', '')}\n"
+            f"- Mức độ ưu tiên: {result.get('priority', '')}\n"
+        )
+
+        if attachment_urls:
+            formatted += f"- Attachments: {json.dumps(attachment_urls)}\n"
 
         return formatted
+            
     
     def get_jira_log_works(self, issue_key: str):
         """
@@ -371,26 +377,22 @@ class ChatAgent:
         Returns:
             str: Nội dung phản hồi người dùng
         """
-        import re
-
-        # Lấy file từ self
         file_path = getattr(self, "file_path", None)
-        filename = getattr(self, "filename", "file")
+        file_name = getattr(self, "file_name", "file")
 
         if not file_path:
-            return "⚠️ Không tìm thấy file để đính kèm."
+            return "Không tìm thấy file để đính kèm."
 
-        # Tìm issue key trong message
         match = re.search(r"[A-Z]+-\d+", message)
         if not match:
-            return "⚠️ Không tìm thấy mã issue trong tin nhắn."
+            return "Không tìm thấy mã issue trong tin nhắn."
 
         issue_key = match.group(0)
 
         try:
-            return add_attachment(self.access_token, self.cloud_id, issue_key, file_path)
+            return add_attachment(self.access_token, self.cloud_id, issue_key, file_path, file_name)
         except Exception as e:
-            return f"❌ Gặp lỗi khi đính kèm file: {str(e)}"
+            return f"Gặp lỗi khi đính kèm file: {str(e)}"
 
         
     
