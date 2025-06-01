@@ -7,7 +7,6 @@ class User(Base):
 
     userId = Column(Integer, primary_key=True, autoincrement=True)
     telegramId = Column(BIGINT, unique=True, nullable=False)
-    telegramUsername = Column(String, nullable=False)
     accessToken = Column(String, nullable=True)
     refreshToken = Column(String, nullable=True)
     cloudId = Column(String, nullable=True) 

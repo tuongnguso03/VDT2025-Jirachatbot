@@ -1,3 +1,4 @@
+
 version: '3.8'
 
 # services:
@@ -68,6 +69,17 @@ services:
       - db
     networks:
       - backend
+  
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    command: http telegram-bot:8000
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN} 
+    networks:
+      - backend
+    depends_on:
+      - api
 
   db:
     image: postgres

@@ -4,6 +4,7 @@ from datetime import datetime
 import pytz
 import unicodedata
 import json
+import re
 
 def get_jira_client(access_token: str, cloud_id: str) -> Jira:
     """
@@ -47,6 +48,7 @@ def get_all_issues(access_token, cloud_id):
         formatted_issues.append({
             "key": issue.get("key"),
             "summary": fields.get("summary"),
+            "type": fields["issuetype"].get("name"),
             "status": fields["status"].get("name"),
             "deadline": fields.get("duedate")
         })
@@ -74,6 +76,7 @@ def get_today_issues(access_token, cloud_id):
         formatted_issues.append({
             "key": issue.get("key"),
             "summary": issue["fields"].get("summary"),
+            "type": issue["fields"]["issuetype"].get("name"),
             "status": issue["fields"]["status"].get("name"),
             "deadline": issue["fields"].get("duedate")
         })
@@ -89,6 +92,7 @@ def get_issue_detail(access_token, cloud_id, issue_key):
         "key": issue.get("key"),
         "summary": fields.get("summary"),
         "description": fields.get("description"),
+        "type": fields["issuetype"].get("name"),
         "status": fields["status"].get("name") if fields.get("status") else None,
         "assignee": fields["assignee"]["displayName"] if fields.get("assignee") else None,
         "reporter": fields["reporter"]["displayName"] if fields.get("reporter") else None,
@@ -114,33 +118,51 @@ def get_worklogs(access_token, cloud_id, issue_key):
     formatted_worklogs = []
     for w in worklogs:
         formatted_worklogs.append({
+            "issue_key": issue_key,
             "id": w.get("id"),
             "author": w.get("author", {}).get("displayName"),
-            "timeSpent": w.get("timeSpent"),
+            "time_spent": w.get("timeSpent"),
             "started": w.get("started"),
             "comment": w.get("comment")
         })
         
     return formatted_worklogs
 
-def format_started(user_input: str, tz='Asia/Ho_Chi_Minh'):
-    dt = datetime.strptime(user_input, "%Y-%m-%d %H:%M")
-    
+
+def format_started(user_input: str = None, tz='Asia/Ho_Chi_Minh'):
     timezone = pytz.timezone(tz)
-    dt = timezone.localize(dt)
-    
+    now = datetime.now(timezone)
+
+    if not user_input or user_input.strip() == "":
+        dt = now 
+    elif re.match(r"^\d{2}:\d{2}$", user_input):
+        dt = datetime.strptime(now.strftime("%Y-%m-%d") + " " + user_input, "%Y-%m-%d %H:%M")
+        dt = timezone.localize(dt)
+    elif re.match(r"^\d{4}-\d{2}-\d{2}$", user_input):
+        dt = datetime.strptime(user_input + " " + now.strftime("%H:%M"), "%Y-%m-%d %H:%M")
+        dt = timezone.localize(dt)
+    else:
+        dt = datetime.strptime(user_input, "%Y-%m-%d %H:%M")
+        dt = timezone.localize(dt)
+
     return dt.strftime('%Y-%m-%dT%H:%M:%S.000%z')
 
-def log_work(access_token, cloud_id, issue_key, date, time_spend, comment):
+def log_work(access_token, cloud_id, issue_key, time_spend, comment, date=None):
     jira = get_jira_client(access_token, cloud_id)
     started = format_started(date)
-    jira.issue_worklog(issue_key, started, time_spend*60, comment)
+    
+    worklog = jira.issue_worklog(issue_key, started, time_spend*60, comment)
+
+    log_id = worklog.get('id')
+    author_name = worklog.get('author', {}).get('displayName', 'Unknown')
 
     return {
         "issue_key": issue_key,
         "started": started,
         "time_spend": time_spend,
-        "comment": comment
+        "comment": comment,
+        "id": log_id,
+        "author": author_name
     }
 
 # def get_account_id(email, access_token, cloud_id):
@@ -160,7 +182,7 @@ def normalize(text):
         return ""
     return unicodedata.normalize("NFKD", text).casefold().strip()
 
-def get_account_id(jira, project_key, assignee_email=None, assignee_displayname=None):
+def get_account_id(jira, project_key, assignee_displayname=None):
     users = jira.get_all_assignable_users_for_project(project_key, start=0, limit=100)
 
     for user in users:
@@ -168,15 +190,12 @@ def get_account_id(jira, project_key, assignee_email=None, assignee_displayname=
         email = user.get("emailAddress", "")
         account_id = user.get("accountId")
 
-        if assignee_email and email and normalize(email) == normalize(assignee_email):
-            return account_id
-
         if assignee_displayname and normalize(display_name) == normalize(assignee_displayname):
             return account_id
 
     return None
 
-def create_issue(access_token, cloud_id, domain, project_key, summary, description, issue_type="Task", assignee_displayname=None, assignee_email=None):
+def create_issue(access_token, cloud_id, domain, project_key, summary, description, issue_type, due_date=None, assignee_displayname=None):
     jira = get_jira_client(access_token, cloud_id)
     
     fields = {
@@ -185,10 +204,17 @@ def create_issue(access_token, cloud_id, domain, project_key, summary, descripti
         "description": description,
         "issuetype": {"name": issue_type}
     }
+
+    if due_date:
+        try:
+            parsed_date = datetime.strptime(due_date, "%d/%m/%Y")
+            fields["duedate"] = parsed_date.strftime("%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"Định dạng ngày không hợp lệ: {due_date}. Vui lòng dùng định dạng dd/MM/YYYY.")
     
     assignee_id = None
-    if assignee_email or assignee_displayname:
-        assignee_id = get_account_id(jira, project_key, assignee_email, assignee_displayname)
+    if assignee_displayname:
+        assignee_id = get_account_id(jira, project_key, assignee_displayname)
 
     if assignee_id:
         fields["assignee"] = {"accountId": assignee_id}
@@ -204,15 +230,16 @@ def create_issue(access_token, cloud_id, domain, project_key, summary, descripti
         "assignee_displayname": assignee_displayname,
         "issue_type": issue_type,
         "description": description,
+        "due_date": due_date
     }
 
-def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None, assignee_email=None):
+def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None):
     jira = get_jira_client(access_token, cloud_id)
     project_key = issue_key.split('-')[0]
     
     assignee_id = None
-    if assignee_email or assignee_displayname:
-        assignee_id = get_account_id(jira, project_key, assignee_email, assignee_displayname)
+    if assignee_displayname:
+        assignee_id = get_account_id(jira, project_key, assignee_displayname)
 
     if assignee_id:
         jira.assign_issue(issue_key, assignee_id)
@@ -220,16 +247,25 @@ def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None, a
         pass
 
     issue = jira.issue(issue_key)
+    fields = issue.get("fields", {})
+
+    due_date_raw = fields.get("duedate")
+    due_date_formatted = None
+    if due_date_raw:
+        try:
+            due_date_formatted = datetime.strptime(due_date_raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            due_date_formatted = due_date_raw
 
     return {
         "project_key": project_key,
-        "issue_id": issue.get("id", None),
         "issue_key": issue.get("key", None),
         "assignee_id": assignee_id,
         "assignee_displayname": assignee_displayname,
-        "summary": issue.get("fields", {}).get("summary", None),
-        "description": issue.get("fields", {}).get("description", None),
-        "issue_type": issue.get("fields", {}).get("issuetype", {}).get("name", None),
+        "summary": fields.get("summary", None),
+        "description": fields.get("description", None),
+        "issue_type": fields.get("issuetype", {}).get("name", None),
+        "due_date": due_date_formatted,
     }
 
 def transition_issue(access_token, cloud_id, issue_key, transition_name):
@@ -295,11 +331,12 @@ def edit_comment(access_token, cloud_id, issue_key, comment_id, new_comment, vis
 
 def main():
     access_token = """eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiI1Y2E1MDA5Zi01NWJkLTQxMzItOGZmOC1hN2JiNDVhYTFlNzMiLCJzdWIiOiI3MTIwMjA6MDhjN2RhNWMtNzZhMi00M2IxLTk3MGItY2FhYzVkZTJjMmQwIiwibmJmIjoxNzQ4NzEwNDY1LCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODcxMDQ2NSwiZXhwIjoxNzQ4NzE0MDY1LCJhdWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsInNjb3BlIjoibWFuYWdlOmppcmEtcHJvamVjdCBvZmZsaW5lX2FjY2VzcyByZWFkOmFjY291bnQgcmVhZDphbmFseXRpY3MuY29udGVudDpjb25mbHVlbmNlIHJlYWQ6YXBwLWRhdGE6Y29uZmx1ZW5jZSByZWFkOmJsb2dwb3N0OmNvbmZsdWVuY2UgcmVhZDpjb21tZW50OmNvbmZsdWVuY2UgcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuYWxsIHJlYWQ6Y29uZmx1ZW5jZS1jb250ZW50LnBlcm1pc3Npb24gcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtZ3JvdXBzIHJlYWQ6Y29uZmx1ZW5jZS1wcm9wcyByZWFkOmNvbmZsdWVuY2Utc3BhY2Uuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtdXNlciByZWFkOmNvbnRlbnQtZGV0YWlsczpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5tZXRhZGF0YTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5wcm9wZXJ0eTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudDpjb25mbHVlbmNlIHJlYWQ6Y3VzdG9tLWNvbnRlbnQ6Y29uZmx1ZW5jZSByZWFkOmRhdGFiYXNlOmNvbmZsdWVuY2UgcmVhZDplbWJlZDpjb25mbHVlbmNlIHJlYWQ6Zm9sZGVyOmNvbmZsdWVuY2UgcmVhZDpqaXJhLXVzZXIgcmVhZDpqaXJhLXdvcmsgcmVhZDptZSByZWFkOnBhZ2U6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLWRldGFpbHM6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLnByb3BlcnR5OmNvbmZsdWVuY2UgcmVhZDpzcGFjZTpjb25mbHVlbmNlIHJlYWQ6dGFzazpjb25mbHVlbmNlIHJlYWQ6dXNlcjpjb25mbHVlbmNlIHJlYWRvbmx5OmNvbnRlbnQuYXR0YWNobWVudDpjb25mbHVlbmNlIHdyaXRlOmppcmEtd29yayIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hdGxfdG9rZW5fdHlwZSI6IkFDQ0VTUyIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50SWQiOiI3MTIwMjA6MGIwY2E2MjUtMjQ5Ni00M2ZlLWE3MTgtYzczY2Q5ZGRlMTM1IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Nlc3Npb25faWQiOiIyYTFhZmQ4NC1mYWU0LTRhOWEtODc3Ni03Mjg1ZGU4NmE4MWYiLCJjbGllbnRfaWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9maXJzdFBhcnR5IjpmYWxzZSwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJ2ZXJpZmllZCI6InRydWUiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcHJvY2Vzc1JlZ2lvbiI6InVzLXdlc3QtMiIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS91anQiOiI2YjczZDg4OC00NDU1LTQwOWYtYjI4Ni1jNzdjMjZhY2NiNWUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vZW1haWxEb21haW4iOiJnbWFpbC5jb20iLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcnRpIjoiZjU0NTgxYmItYjliOS00ODcyLWI5NmUtMDE0MWNkZDcwOTk3IiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tLzNsbyI6dHJ1ZSwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcmVmcmVzaF9jaGFpbl9pZCI6IkkzZVpkRTZoT09UeTBSV3Y4dTUxVUJ4MHJRMUU0MEk0LTcxMjAyMDowOGM3ZGE1Yy03NmEyLTQzYjEtOTcwYi1jYWFjNWRlMmMyZDAtNmYzZjc2ZGQtNjU2ZC00MjM2LTkwZjMtZTI3ODA1ODI0YTRlIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL29hdXRoQ2xpZW50SWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50RW1haWxEb21haW4iOiJjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsIjoiYmRjMjhhNzAtODNhNS00YmU2LWJmOTMtZjVmMTQ5NzhhNmFkQGNvbm5lY3QuYXRsYXNzaWFuLmNvbSJ9.jSyJPlTSyT3jWSOyzgHaGmvQdDBjsrHqSlbY233SqLPLf3jutK9lVjT7AYMHtLKUA84LkAPVC8J2DtHi7FdBw4Bpr5DSlx25AzbFivP1YfylGj9Le_oNwzEK2f3Vt1rI4ZPOTy_ki6cmDlaHfSYVxiDkCIjlsLyKEGz85_ydlq0V9sM6uO8RAJ1EzTN-zSdCpVDzzTSAluemBNNyd7e1NgITe4QW-rwVR2hl-5AY_tRJVHQYR_QCzYmL0pW0WXXf5XFDYlwQIGrk1WjbBztSVBPErJyDtACivcCNcxYOvf2JP4DrF8FZgejlDfSCi3Nqgny6t-Yu1yxfoQnR2fQniA"""
+
     cloud_id = "122d270d-f780-4621-b27d-1989a54e38e5"
     domain = "metalwallcrusher"
     
     try:
-        issue = get_today_issues(access_token, cloud_id)
+        issue = get_comments(access_token, cloud_id, "VDT-1")
         print(issue)
     except Exception as e:
         print("Lỗi khi lấy issue:", str(e))

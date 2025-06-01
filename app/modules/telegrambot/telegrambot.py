@@ -19,10 +19,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("USERNAME:", update.effective_user.username)
     user = session.query(User).filter_by(telegramId=telegram_id).first()
     if not user:
-        user = User(
-            telegramId=telegram_id,
-            telegramUsername=update.effective_user.username
-        )
+        user = User(telegramId=telegram_id)
         session.add(user)
         session.commit()
 
@@ -45,14 +42,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = session.query(User).filter_by(telegramId=telegram_id).first()
         if user:
-            msg_user = Message(userId=user.userId, role="user", message=user_text)
-            session.add(msg_user)
-            session.commit()
-
             recent_messages = (
                 session.query(Message)
                 .filter_by(userId=user.userId)
-                .order_by(Message.timestamp.desc()) 
+                .order_by(Message.timestamp.desc(), Message.messageId.desc())
                 .limit(10)
                 .all()
             )
@@ -63,8 +56,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": msg.role, "message": msg.message} for msg in recent_messages
             ]
 
-            agent = ChatAgent(user_id=user.userId, access_token=user.accessToken, cloud_id=user.cloudId, domain=user.domain)
-            # chat_history = reformat_chat_history(formatted_conversation)
+            agent = ChatAgent(
+                user_id=user.userId,
+                access_token=user.accessToken,
+                cloud_id=user.cloudId,
+                domain=user.domain
+            )
+
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
                 None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation,)
@@ -72,17 +70,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             reply_text = response.candidates[0].content.parts[0].text
 
+            msg_user = Message(userId=user.userId, role="user", message=user_text)
             msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
-            session.add(msg_bot)
+            session.add_all([msg_user, msg_bot])
             session.commit()
 
             await update.message.reply_text(reply_text)
+
     except Exception as e:
         logger.error(f"Error in handle_message: {e}")
         logger.error(traceback.format_exc())
         await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
     finally:
         session.close()
+
 
 def send_telegram_message(chat_id: str, text: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -101,8 +102,9 @@ def send_telegram_message(chat_id: str, text: str):
     try:
         user = session.query(User).filter_by(telegramId=chat_id).first()
         if user:
+            msg_user = Message(userId=user.userId, role="user", message="Nhắc việc từ hệ thống")
             msg_bot = Message(userId=user.userId, role="bot", message=text)
-            session.add(msg_bot)
+            session.add_all([msg_user, msg_bot])
             session.commit()
     except Exception as e:
         logger.error(f"Error saving bot message: {e}")
