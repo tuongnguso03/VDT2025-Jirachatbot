@@ -1,3 +1,45 @@
+
+version: '3.8'
+
+# services:
+#   app:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: telegram-bot
+#     restart: always
+#     env_file:
+#       - .env
+#     ports:
+#       - "8000:8000"
+#     volumes:
+#       - ./app:/app/app
+#     depends_on:
+#       - db
+#     networks:
+#       - backend
+
+#   db:
+#     image: postgres:15
+#     container_name: postgres
+#     restart: always
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: ${POSTGRES_DB}
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     ports:
+#       - "5432:5432"
+#     networks:
+#       - backend
+
+# volumes:
+#   postgres_data:
+
+# networks:
+#   backend:
+
 services:
   api:
     build: .
@@ -40,18 +82,24 @@ services:
       - api
 
   db:
-    image: postgres:15
+    image: postgres
     container_name: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d telegram_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
