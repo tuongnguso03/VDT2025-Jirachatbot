@@ -7,7 +7,7 @@ class Message(Base):
 
     messageId = Column(Integer, primary_key=True, autoincrement=True)
     userId = Column(Integer, ForeignKey('users.userId'), nullable=False)
-    role = Column(String, nullable=False)  # 'user' hoặc 'bot'
+    role = Column(String, nullable=False) 
     message = Column(TEXT, nullable=False)
     timestamp = Column(TIMESTAMP, server_default=func.now())
 
