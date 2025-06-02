@@ -101,6 +101,6 @@ def check_jira_worklogs():
 
 def start_scheduler_everyday():
     scheduler = BackgroundScheduler(timezone="Asia/Ho_Chi_Minh")
-    scheduler.add_job(check_jira_tasks, 'cron', hour=8, minute=0)
-    scheduler.add_job(check_jira_worklogs, 'cron', hour=17, minute=0)
+    scheduler.add_job(check_jira_tasks, 'cron', hour=16, minute=2)
+    scheduler.add_job(check_jira_worklogs, 'cron', hour=16, minute=3)
     scheduler.start()

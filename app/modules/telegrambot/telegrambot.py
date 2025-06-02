@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from models import User, Message
 from database import SessionLocal
@@ -34,7 +34,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"[Nhấn để đăng nhập Jira]({jira_link})"
     )
 
-    await update.message.reply_text(welcome_msg, parse_mode='Markdown', disable_web_page_preview=True)
+    keyboard = [['Lấy ra danh sách các tasks!', 'Lấy ra danh sách tasks hôm nay!']]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(welcome_msg, parse_mode='Markdown', disable_web_page_preview=True, reply_markup=reply_markup)
 
     session.close()
 
