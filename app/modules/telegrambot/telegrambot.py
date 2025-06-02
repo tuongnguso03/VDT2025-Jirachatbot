@@ -221,3 +221,28 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session.close()
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "📘 *Hướng dẫn sử dụng Bot Jira*\n\n"
+        "*Một số prompt bạn có thể thử:*\n"
+        "- `Lấy ra danh sách các tasks`\n"
+        "- `Lấy ra danh sách tasks hôm nay`\n"
+        "- `Lấy thông tin chi tiết task ABC-1`\n"
+        "- `Lấy ra danh sách worklog task ABC-1`\n"
+        "- `Log work cho tôi task ABC-1 bắt đầu từ 10:00 hôm nay, làm trong 30 phút và nội dung là Hoàn thành`\n"
+        "- `Tạo mới task với project_key: VDT, summary: Task mới, description: Nội dung task mới, issue_type: Task, deadline: 08/06/2025, giao cho Nguyễn Ngọc Hà đảm nhiệm`\n"
+        "- `Giao task ABC-1 cho Nguyễn Ngọc Hà đảm nhiệm`\n"
+        "- `Chuyển trạng thái task ABC-1 sang In Progress`\n"
+        "- `Lấy danh sách các bình luận của task ABC-1`\n"
+        "- `Tạo bình luận mới cho task ABC-1 với nội dung Hoàn thành`\n"
+        "- `Chỉnh sửa bình luận 10001 của task ABC-1 nội dung Đã fix bug`\n"
+        "- `Đính kèm file vào task ABC-1`\n"
+        "- `Lấy ra ID và tên của các page chứa nội dung tài liệu của task ABC-1`\n"
+        "- `Lấy ra thông tin chi tiết của John Lennon documentation ID 65849`\n\n"
+        "*Lệnh hỗ trợ:*\n"
+        "/start - Đăng nhập Jira\n"
+        "/help - Hướng dẫn sử dụng"
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
