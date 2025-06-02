@@ -4,7 +4,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from modules.telegrambot.telegrambot import start, handle_message, handle_file, help_command
 from modules.fastapi.config import BOT_TOKEN
 
-WEBHOOK_URL = "https://a4d9-104-28-254-74.ngrok-free.app" 
+WEBHOOK_URL = "https://1870-104-28-222-75.ngrok-free.app" 
 
 def run_bot():
     print("Bot is running with webhook...")

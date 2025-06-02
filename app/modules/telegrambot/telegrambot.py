@@ -118,7 +118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in handle_message: {e}")
         logger.error(traceback.format_exc())
-        await update.message.reply_text("Đã có lỗi xảy ra, vui lòng thử lại sau.")
+        await update.message.reply_text("Chat bot hiện không khả dụng, vui lòng thử lại sau ít phút!")
     finally:
         session.close()
 
@@ -237,7 +237,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "- `Chuyển trạng thái task VDT-1 sang Done`\n"
         "- `Lấy danh sách các bình luận của task VDT-1`\n"
         "- `Tạo bình luận mới cho task VDT-1 với nội dung Hoàn thành`\n"
-        "- `Chỉnh sửa bình luận 10001 của task VDT-1 nội dung Đã fix bug`\n"
+        "- `Chỉnh sửa bình luận ID 10001 của task VDT-1 nội dung Đã fix bug`\n"
         "- `Đính kèm file vào task VDT-1`\n"
         "- `Lấy ra ID và tên của các page chứa nội dung tài liệu có thể truy cập được trong Confluence của task VDT-8`\n"
         "- `Lấy ra thông tin chi tiết của John Lennon documentation ID 65849`\n\n"
