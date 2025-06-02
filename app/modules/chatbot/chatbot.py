@@ -30,7 +30,7 @@ class ChatAgent:
         self.domain = domain
         self.functions = [
             self.get_jira_issues, 
-            self.get_jira_issues_today, 
+            self.get_jira_issues_today,
             self.get_jira_issue_detail,
             self.get_jira_log_works,
             self.create_jira_log_work,
@@ -40,7 +40,6 @@ class ChatAgent:
             self.get_jira_comments,
             self.create_jira_comment,
             self.edit_jira_comment,
-            self.attach_file_to_jira_issue,
             self.get_confluence_page_info,
             self.get_confluence_page_list]
 
