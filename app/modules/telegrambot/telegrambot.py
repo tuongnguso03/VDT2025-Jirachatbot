@@ -1,6 +1,6 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from models import User, Message
+from models import User, Message, Feedback
 from database import SessionLocal
 from modules.fastapi.config import get_jira_auth_url, BOT_TOKEN
 import json
@@ -12,8 +12,8 @@ import requests
 import os
 import tempfile
 import aiohttp
-import io
 import re
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,6 +68,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user = session.query(User).filter_by(telegramId=telegram_id).first()
+
+        if user.awaitingFeedback:
+            # Lưu feedback, gửi cảm ơn
+            feedback = Feedback(
+                userId=user.userId,
+                content=user_text,
+                createdAt=datetime.now()
+            )
+            session.add(feedback)
+
+            # Reset trạng thái chờ feedback
+            user.awaiting_feedback = False
+            session.commit()
+
+            await update.message.reply_text("✅ Cảm ơn bạn đã góp ý!")
+            return
+
         if user:
             recent_messages = (
                 session.query(Message)
