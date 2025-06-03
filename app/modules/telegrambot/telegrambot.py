@@ -1,5 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import telegram.helpers
 from models import User, Message, Feedback
 from database import SessionLocal
 from modules.fastapi.config import get_jira_auth_url, BOT_TOKEN
@@ -70,7 +71,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = session.query(User).filter_by(telegramId=telegram_id).first()
 
         if user.awaitingFeedback:
-            # Lưu feedback, gửi cảm ơn
             feedback = Feedback(
                 userId=user.userId,
                 content=user_text,
@@ -78,7 +78,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             session.add(feedback)
 
-            # Reset trạng thái chờ feedback
             user.awaitingFeedback = False
             session.commit()
 
@@ -116,13 +115,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             reply_text = response.candidates[0].content.parts[0].text
 
-            msg_user = Message(userId=user.userId, role="user", message=user_text)
-            msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
-            session.add_all([msg_user, msg_bot])
-            session.commit()
-
-            await update.message.reply_text(reply_text)
-
             attachments_urls = []
             match = re.search(r'Attachments:\s*(\[[\s\S]*?\])', reply_text)
             if match:
@@ -130,6 +122,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     attachments_urls = json.loads(match.group(1))
                 except json.JSONDecodeError:
                     pass
+
+            def remove_attachments_section(text: str) -> str:
+                return re.sub(r'\n?-?- Attachments:\s*\[.*?\]', '', text, flags=re.DOTALL)
+
+            reply_text = remove_attachments_section(reply_text)
+
+            msg_user = Message(userId=user.userId, role="user", message=user_text)
+            msg_bot = Message(userId=user.userId, role="bot", message=reply_text)
+            session.add_all([msg_user, msg_bot])
+            session.commit()
+            
+            # safe_text = telegram.helpers.escape_markdown(reply_text, version=2)
+            # await update.message.reply_text(safe_text, parse_mode="MarkdownV2")
+            
+            def escape_markdown(text):
+                markdown_special_chars = r"\`*_{}[]()#+-.!|>"
+                for char in markdown_special_chars:
+                    text = text.replace(char, f"\\{char}")
+                return text
+
+            def format_markdown_text(text):
+                code_blocks = []
+                def replace_code_block(match):
+                    code_blocks.append(match.group(0))
+                    return f"[[CODE_BLOCK_{len(code_blocks)-1}]]"
+
+                text_wo_code = re.sub(r"```.*?```", replace_code_block, text, flags=re.DOTALL)
+
+                escaped_text = escape_markdown(text_wo_code)
+
+                for i, block in enumerate(code_blocks):
+                    escaped_text = escaped_text.replace(f"\\[\\[CODE\\_BLOCK\\_{i}\\]\\]", block)  # cần escape dấu `[` khi bị escape markdown
+
+                return escaped_text
+
+        
+            formatted = format_markdown_text(reply_text)
+
+            def reply_text_contains_markdown(text):
+                markdown_special_chars = r"```"
+                return any(char in text for char in markdown_special_chars)
+
+            if reply_text_contains_markdown(reply_text):
+                await update.message.reply_text(formatted, parse_mode="MarkdownV2")
+            else:
+                await update.message.reply_text(reply_text)
 
             for url in attachments_urls:
                 headers = {"Authorization": f"Bearer {user.accessToken}"} 
