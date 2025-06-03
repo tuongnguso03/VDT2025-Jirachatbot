@@ -55,7 +55,8 @@ def get_all_issues(access_token, cloud_id):
             "summary": fields.get("summary"),
             "type": fields["issuetype"].get("name"),
             "status": fields["status"].get("name"),
-            "deadline": fields.get("duedate")
+            "deadline": fields.get("duedate"),
+            "priority": fields.get("priority", {}).get("name")
         })
     return formatted_issues
 
@@ -78,15 +79,16 @@ def get_today_issues(access_token, cloud_id):
     
     formatted_issues = []
     for issue in issues:
+        fields = issue["fields"]
         formatted_issues.append({
             "key": issue.get("key"),
-            "summary": issue["fields"].get("summary"),
-            "type": issue["fields"]["issuetype"].get("name"),
-            "status": issue["fields"]["status"].get("name"),
-            "deadline": issue["fields"].get("duedate")
+            "summary": fields.get("summary"),
+            "type": fields["issuetype"].get("name"),
+            "status": fields["status"].get("name"),
+            "deadline": fields.get("duedate"),
+            "priority": fields.get("priority", {}).get("name")
         })
     return formatted_issues
-
 
 def get_issue_detail(access_token, cloud_id, issue_key):
     jira = get_jira_client(access_token, cloud_id)

@@ -4,15 +4,12 @@ from .utils.function_declaration import GeminiFunction
 import os
 from dotenv import load_dotenv
 from typing import List, Dict
-
+import json
+import re
+from datetime import datetime
 from modules.confluence.confluence_doc import get_page_by_id_v2, get_all_page_ids_and_titles_v2
 from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment, add_attachment
 
-import json
-import requests
-import mimetypes
-import re
-# Only run this block for Gemini Developer API
 load_dotenv()
 
 class ChatAgent:
@@ -43,69 +40,150 @@ class ChatAgent:
             self.get_confluence_page_info,
             self.get_confluence_page_list]
 
+
     def get_jira_issues(self):
         """
-        Lấy ra danh sách tasks (công việc) của người dùng
-        
-        Hàm này trả về thông tin danh sách tasks (công việc) của người dùng đó.
+        Lấy ra danh sách tasks (công việc) của người dùng và định dạng thành bảng MarkdownV2.
 
         Trả về:
-            Một list chuỗi chứa thông tin danh sách tasks được yêu cầu.
+            Chuỗi MarkdownV2 để gửi qua Telegram. Không được viết thêm gì nữa.
         """
         result = get_all_issues(self.access_token, self.cloud_id)
 
         if not result:
             return "🎉 Bạn không có công việc nào đang xử lý!"
 
-        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
+        def escape_markdown(text: str) -> str:
+            chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
+            for ch in chars_to_escape:
+                text = text.replace(ch, f"\\{ch}")
+            return text
 
-        for idx, issue in enumerate(result, start=1):
-            key = issue.get("key", "N/A")
-            summary = issue.get("summary", "Không có tiêu đề")
-            type = issue.get("type", "N/A")
-            status = issue.get("status", "Không rõ trạng thái")
-            deadline = issue.get("deadline", "Chưa có hạn")
+        def format_markdown_table(issues: list[dict]) -> str:
+            MAX_SUMMARY_LENGTH = 22
 
-            formatted += (
-                f"{idx}. *{key}* - {summary}\n"
-                f"    - Loại: {type}\n"
-                f"    - Trạng thái: `{status}`\n"
-                f"    - Deadline: {deadline}\n\n"
+            headers = ["Key", "Summary", "Type", "Priority", "Deadline"]
+            col_widths = {
+                "key": max(len("Key"), max((len(issue["key"]) for issue in issues), default=0)),
+                "summary": MAX_SUMMARY_LENGTH,
+                "type": max(len("Type"), max((len(issue["type"]) for issue in issues), default=0)),
+                "priority": max(len("Priority"), max((len(issue.get("priority") or "") for issue in issues), default=0)),
+                "deadline": max(len("Deadline"), max((len(issue["deadline"]) if issue["deadline"] else 0 for issue in issues), default=0)),
+            }
+
+            def pad(text: str, width: int) -> str:
+                return text + ' ' * (width - len(text))
+
+            lines = []
+
+            lines.append(
+                f"{pad('Key', col_widths['key'])} | "
+                f"{pad('Summary', col_widths['summary'])} | "
+                # f"{pad('Type', col_widths['type'])} | "
+                f"{pad('Priority', col_widths['priority'])} | "
+                f"{pad('Deadline', col_widths['deadline'])}"
             )
 
-        return formatted
+            lines.append(
+                f"{'-' * (col_widths['key'] + 1)}|"
+                f"{'-' * (col_widths['summary'] + 2)}|"
+                # f"{'-' * (col_widths['type'] + 2)}|"
+                f"{'-' * (col_widths['priority'] + 2)}|"
+                f"{'-' * (col_widths['deadline'] + 1)}"
+            )
+
+            for issue in issues:
+                key = pad(escape_markdown(issue['key']), col_widths['key'])
+                summary_raw = issue['summary'][:MAX_SUMMARY_LENGTH]
+                if len(issue['summary']) > MAX_SUMMARY_LENGTH:
+                    summary_raw = summary_raw[:-3] + "..."
+                summary = pad(escape_markdown(summary_raw), col_widths['summary'])
+                # type_ = pad(escape_markdown(issue['type']), col_widths['type'])
+                priority_raw = issue.get("priority") or ""
+                priority = pad(escape_markdown(priority_raw), col_widths['priority'])
+                deadline = issue['deadline'] if issue['deadline'] else ""
+                deadline = pad(escape_markdown(deadline), col_widths['deadline'])
+
+                lines.append(
+                    f"{key} | {summary} | {priority} | {deadline}"
+                )
+
+            table = "\n".join(lines)
+            return f"Đây là danh sách công việc của bạn:\n```{table}```"
+
+        return format_markdown_table(result)
+
 
     def get_jira_issues_today(self):
         """
-        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm nay.
-        
-        Hàm này trả về thông tin danh sách tasks (công việc) của người dùng đó ngày hôm nay.
+        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm nay và định dạng thành bảng MarkdownV2.
 
         Trả về:
-            Một list chuỗi chứa thông tin danh sách tasks được yêu cầu.
+            Hàm này trả về khối mã được định dạng theo MarkdownV2. Không thêm bất kỳ văn bản nào. Không thêm bất kỳ mô tả hoặc tóm tắt nào
         """
         result = get_today_issues(self.access_token, self.cloud_id)
 
         if not result:
             return "🎉 Bạn không có công việc nào đang xử lý!"
 
-        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
+        def escape_markdown(text: str) -> str:
+            chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
+            for ch in chars_to_escape:
+                text = text.replace(ch, f"\\{ch}")
+            return text
 
-        for idx, issue in enumerate(result, start=1):
-            key = issue.get("key", "N/A")
-            summary = issue.get("summary", "Không có tiêu đề")
-            type = issue.get("type", "N/A")
-            status = issue.get("status", "Không rõ trạng thái")
-            deadline = issue.get("deadline", "Chưa có hạn")
+        def format_markdown_table(issues: list[dict]) -> str:
+            MAX_SUMMARY_LENGTH = 22
 
-            formatted += (
-                f"{idx}. *{key}* - {summary}\n"
-                f"    - Loại: {type}\n"
-                f"    - Trạng thái: `{status}`\n"
-                f"    - Deadline: {deadline}\n\n"
+            headers = ["Key", "Summary", "Type", "Priority", "Deadline"]
+            col_widths = {
+                "key": max(len("Key"), max((len(issue["key"]) for issue in issues), default=0)),
+                "summary": MAX_SUMMARY_LENGTH,
+                "type": max(len("Type"), max((len(issue["type"]) for issue in issues), default=0)),
+                "priority": max(len("Priority"), max((len(issue.get("priority") or "") for issue in issues), default=0)),
+                "deadline": max(len("Deadline"), max((len(issue["deadline"]) if issue["deadline"] else 0 for issue in issues), default=0)),
+            }
+
+            def pad(text: str, width: int) -> str:
+                return text + ' ' * (width - len(text))
+
+            lines = []
+
+            lines.append(
+                f"{pad('Key', col_widths['key'])} | "
+                f"{pad('Summary', col_widths['summary'])} | "
+                f"{pad('Type', col_widths['type'])} | "
+                f"{pad('Priority', col_widths['priority'])}"
             )
 
-        return formatted
+            lines.append(
+                f"{'-' * (col_widths['key'] + 1)}|"
+                f"{'-' * (col_widths['summary'] + 2)}|"
+                f"{'-' * (col_widths['type'] + 2)}|"
+                f"{'-' * (col_widths['priority'] + 1)}"
+            )
+
+            for issue in issues:
+                key = pad(escape_markdown(issue['key']), col_widths['key'])
+
+                summary_raw = issue['summary']
+                if len(summary_raw) > MAX_SUMMARY_LENGTH:
+                    summary_raw = summary_raw[:MAX_SUMMARY_LENGTH - 3] + "..."
+                summary = pad(escape_markdown(summary_raw), col_widths['summary'])
+
+                type = pad(escape_markdown(issue['type']), col_widths['type'])
+                priority_raw = issue.get("priority") or ""
+                priority = pad(escape_markdown(priority_raw), col_widths['priority'])
+
+                lines.append(
+                    f"{key} | {summary}| {type} | {priority}"
+                )
+
+            table = "\n".join(lines)
+            return f"Đây là danh sách công việc của bạn:\n```{table}```"
+
+        return format_markdown_table(result)
+
 
     def get_jira_issue_detail(self, issue_key: str):
         """
@@ -116,24 +194,24 @@ class ChatAgent:
         Tham số:
             issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
             
-        Trả về dict gồm: thông tin mô tả issue dạng chuỗi
+        Trả về:
+            Thông tin dự án đã formatted gồm cả icon.
         """
         result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
 
-        
         attachment_urls = [att.get("content_url") for att in result.get("attachments", []) if att.get("content_url")]
 
         formatted = (
-            f"- Dự án: {result.get('project', '')}\n"
-            f"- Jira Issue: {result.get('key', '')}\n"
-            f"- Tóm tắt: {result.get('summary', '')}\n"
-            f"- Mô tả: {result.get('description', '')}\n"
-            f"- Loại: {result.get('type', '')}\n"
-            f"- Deadline: {result.get('duedate', 'Không có')}\n"
-            f"- Trạng thái: {result.get('status', '')}\n"
-            f"- Người thực hiện: {result.get('assignee', 'Chưa gán')}\n"
-            f"- Người tạo: {result.get('reporter', '')}\n"
-            f"- Mức độ ưu tiên: {result.get('priority', '')}\n"
+            f"- 📂 Dự án: {result.get('project', '')}\n"
+            f"- 🔑 Jira Issue: {result.get('key', '')}\n"
+            f"- 📝 Tóm tắt: {result.get('summary', '')}\n"
+            f"- ✏️ Mô tả: {result.get('description', '')}\n"
+            f"- 🔖 Loại: {result.get('type', '')}\n"
+            f"- ⭐ Mức độ ưu tiên: {result.get('priority', '')}\n"
+            f"- 📅 Deadline: {result.get('duedate', 'Không có')}\n"
+            f"- 🚦 Trạng thái: {result.get('status', '')}\n"
+            f"- 👷‍♂️ Người thực hiện: {result.get('assignee', 'Không có')}\n"
+            f"- 🧾 Người tạo: {result.get('reporter', '')}\n"
         )
 
         if attachment_urls:
@@ -152,27 +230,65 @@ class ChatAgent:
             issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
 
         Trả về:
-            Một chuỗi chứa thông tin worklog.
+            Chuỗi MarkdownV2 để gửi qua Telegram. Trả về y hệt như đã format không được thêm thắt gì nữa.
         """
         result = get_worklogs(self.access_token, self.cloud_id, issue_key)
-        formatted = "📋 Danh sách công việc đang xử lý:\n\n"
 
-        for idx, issue in enumerate(result, start=1):
-            id = issue.get("id", "N/A")
-            author = issue.get("author", "N/A")
-            time_spent = issue.get("time_spent", "N/A")
-            started = issue.get("started", "N/A")
-            comment = issue.get("comment", "Không có comment")
+        if not result:
+            return "Issue này chưa có worklog!"
 
-            formatted += (
-                f"- WorklogID: {id}\n"
-                f"- Người log work: {author}\n"
-                f"- Thời gian làm việc: {time_spent}\n"
-                f"- Thời gian bắt đầu làm: {started}\n"
-                f"- Comment: {comment}\n"
+        def escape_markdown(text: str) -> str:
+            chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
+            for ch in chars_to_escape:
+                text = text.replace(ch, f"\\{ch}")
+            return text
+
+        def format_markdown_table(issues: list[dict]) -> str:
+            headers = ["ID", "Author", "Start", "Time", "Comment"]
+            col_widths = {
+                "id": max(len("ID"), max((len(issue["id"]) for issue in issues), default=0)),
+                "author": max(len("Author"), max((len(issue["author"]) for issue in issues), default=0)),
+                "started": max(len("Start"), max((len(issue["started"]) for issue in issues), default=0)),
+                "time_spent": max(len("Time"), max((len(issue.get("time_spent") or "") for issue in issues), default=0)),
+                "comment": max(len("Comment"), max((len(issue["comment"]) if issue["comment"] else 0 for issue in issues), default=0)),
+            }
+
+            def pad(text: str, width: int) -> str:
+                return text + ' ' * (width - len(text))
+
+            lines = []
+
+            lines.append(
+                f"{pad('ID', col_widths['id'])} | "
+                f"{pad('Author', col_widths['author'])} | "
+                # f"{pad('Started', col_widths['started'])} | "
+                f"{pad('Time', col_widths['time_spent'])} | "
+                f"{pad('Comment', col_widths['comment'])}"
             )
 
-        return formatted
+            lines.append(
+                f"{'-' * (col_widths['id'] + 1)}|"
+                f"{'-' * (col_widths['author'] + 2)}|"
+                # f"{'-' * (col_widths['started'] + 2)}|"
+                f"{'-' * (col_widths['time_spent'] + 2)}|"
+                f"{'-' * (col_widths['comment'] + 1)}"
+            )
+
+            for issue in issues:
+                id = pad(escape_markdown(issue['id']), col_widths['id'])
+                author = pad(escape_markdown(issue['author']), col_widths['author'])
+                # started = pad(escape_markdown(issue['started']), col_widths['started'])
+                time_spent = pad(escape_markdown(issue['time_spent']), col_widths['time_spent'])
+                comment = pad(escape_markdown(issue['comment']), col_widths['comment'])
+
+                lines.append(
+                    f"{id} | {author} | {time_spent} | {comment}"
+                )
+
+            table = "\n".join(lines)
+            return f"Đây là danh sách worklog:\n```{table}```"
+
+        return format_markdown_table(result)
 
     def create_jira_log_work(self, issue_key: str, time_spend: int, comment: str, date: str):
         """
@@ -187,7 +303,7 @@ class ChatAgent:
             comment (str): Bình luận cho log work.
 
         Trả về:
-            Một chuỗi chứa thông tin worklog sau khi log work.
+            Thông tin worklog đầy đủ sau đã formatted gồm cả icon.
         """
         result = log_work(self.access_token, self.cloud_id, issue_key, time_spend, comment, date)
 
@@ -200,7 +316,7 @@ class ChatAgent:
             f"- Comment: {result.get('comment', 'Không có')}\n"
         ) 
 
-        return formatted
+        return f"✅ Đã log work thành công!\n\n{formatted}"
     
     def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str):
         """
@@ -217,20 +333,18 @@ class ChatAgent:
             assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này, có thể rỗng.
 
         Trả về:
-            Một chuỗi chứa thông tin task sau khi tạo task.
+            Thông tin issue đầy đủ sau đã formatted gồm cả icon.
         """
         result = create_issue(self.access_token, self.cloud_id, self.domain, project_key, summary, description, issue_type, due_date, assignee_displayname)
 
         formatted = (
             f"- Project Key: {project_key}\n"
-            f"- Issue Id: {result.get('issue_id', '')}\n"
             f"- Issue Key: {result.get('issue_key', '')}\n"
             f"- Link Issue: {result.get('issue_url', '')}\n"
             f"- Tóm tắt: {result.get('summary', '')}\n"
             f"- Mô tả: {result.get('description', '')}\n"
             f"- Loại: {result.get('issue_type', '')}\n"
             f"- Ngày đến hạn: {result.get('due_date', 'N/A')}\n"
-            f"- AssigneeId: {result.get('assignee_id', 'Không có')}\n"
             f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
         ) 
 
@@ -298,26 +412,68 @@ class ChatAgent:
             issue_key (str): Key của issue muốn lấy comments. Có thể bao gồm cả chữ và số.
 
         Trả về:
-            Một chuỗi chứa thông tin sau khi lấy danh sách comments.
+            Chuỗi MarkdownV2 để gửi qua Telegram. Không được viết thêm gì nữa.
         """
         result = get_comments(self.access_token, self.cloud_id, issue_key)
-        formatted = ""
 
-        for idx, issue in enumerate(result, start=1):
-            id = issue.get("id")
-            author = issue.get("author")
-            body = issue.get("body")
-            created = issue.get("created")
-            updated = issue.get("updated")
+        if not result:
+            return "🎉 Bạn không có công việc nào đang xử lý!"
 
-            formatted += (
-                f"{idx}. *{id}* - {body}\n"
-                f"    - Người tạo: {author}\n"
-                f"    - Tạo lúc: `{created}`\n"
-                f"    - Chỉnh sửa lúc: {updated}\n\n"
+        def escape_markdown(text: str) -> str:
+            chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
+            for ch in chars_to_escape:
+                text = text.replace(ch, f"\\{ch}")
+            return text
+
+        def format_markdown_table(issues: list[dict]) -> str:
+            MAX_LENGTH = 22
+
+            headers = ["ID", "Author", "Comment", "Created At"]
+            col_widths = {
+                "id": max(len("ID"), max((len(issue["id"]) for issue in issues), default=0)),
+                "author": max(len("Author"), max((len(issue["author"]) for issue in issues), default=0)),
+                "body": MAX_LENGTH,            
+                "created": max(len("Created At"), max((len(issue.get("created") or "") for issue in issues), default=0)),
+            }
+
+            def pad(text: str, width: int) -> str:
+                return text + ' ' * (width - len(text))
+
+            lines = []
+
+            lines.append(
+                f"{pad('ID', col_widths['id'])} | "
+                f"{pad('Author', col_widths['author'])} | "
+                f"{pad('Comment', col_widths['body'])}"
+                # f"{pad('Created At', col_widths['created'])}"
             )
 
-        return formatted
+            lines.append(
+                f"{'-' * (col_widths['id'] + 1)}|"
+                f"{'-' * (col_widths['author'] + 2)}|"
+                f"{'-' * (col_widths['body'] + 1)}"
+                # f"{'-' * (col_widths['created'] + 1)}"
+            )
+
+            for issue in issues:
+                id = pad(escape_markdown(issue['id']), col_widths['id'])
+
+                comment_raw = issue['body']
+                if len(comment_raw) > MAX_LENGTH:
+                    comment_raw = comment_raw[:MAX_LENGTH - 3] + "..."
+                body = pad(escape_markdown(comment_raw), col_widths['body'])
+
+                author = pad(escape_markdown(issue['author']), col_widths['author'])
+                # created = pad(escape_markdown(issue['created']), col_widths['created'])
+
+                lines.append(
+                    f"{id} | {author} | {body}"
+                )
+
+            table = "\n".join(lines)
+            return f"Đây là danh sách bình luận:\n```{table}```"
+
+        return format_markdown_table(result)
     
     def create_jira_comment(self, issue_key: str, comment: str):
         """
@@ -392,8 +548,6 @@ class ChatAgent:
             return add_attachment(self.access_token, self.cloud_id, issue_key, file_path, file_name)
         except Exception as e:
             return f"Gặp lỗi khi đính kèm file: {str(e)}"
-
-        
     
     def get_confluence_page_info(self, page_id: str):
         """
