@@ -79,7 +79,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session.add(feedback)
 
             # Reset trạng thái chờ feedback
-            user.awaiting_feedback = False
+            user.awaitingFeedback = False
             session.commit()
 
             await update.message.reply_text("✅ Cảm ơn bạn đã góp ý!")
