@@ -26,7 +26,7 @@ def check_jira_tasks():
             try:
                 issues = get_today_issues(access_token, cloud_id)
                 if issues:
-                    message = "📌 *Task hôm nay của bạn trên Jira:*\n"
+                    message = "📌  *TASK HÔM NAY CỦA BẠN TRÊN JIRA:*\n\n"
                     for i, issue in enumerate(issues, 1):
                         message += f"{i}. `{issue['key']}` - {issue['summary']}\n"
                 else:
@@ -85,10 +85,10 @@ def check_jira_worklogs():
                         issues_not_logged.append(issue)
 
                 if issues_not_logged:
-                    message = "⏰ *Nhắc nhở log work Jira hôm nay:*\nBạn chưa log work cho các task sau:\n"
+                    message = "⏰  *NHẮC NHỞ LOG WORK JIRA HÔM NAY:*\n\nBạn chưa log work cho các task sau:\n"
                     for i, issue in enumerate(issues_not_logged, 1):
                         message += f"{i}. `{issue['key']}` - {issue['summary']}\n"
-                    message += "\nHãy đảm bảo bạn đã log work đầy đủ nhé! 💪"
+                    message += "Hãy đảm bảo bạn đã log work đầy đủ nhé! 💪"
 
                     print(f"Nhắc user {user.userId} log work - telegramId={telegram_id}")
                     send_telegram_message(telegram_id, message)

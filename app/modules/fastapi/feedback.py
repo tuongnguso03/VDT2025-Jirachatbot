@@ -21,9 +21,8 @@ async def send_feedback_prompt():
             try:
                 await bot.send_message(
                     chat_id=user.telegramId,
-                    text="📣 Khảo sát định kỳ\n\nBạn đánh giá trải nghiệm sử dụng chatbot như thế nào?\nBạn có góp ý gì cho hệ thống không?\n\nVui lòng trả lời tin nhắn này để chúng tôi cải thiện dịch vụ."
+                    text="📣  KHẢO SÁT ĐỊNH KỲ\n\nBạn đánh giá trải nghiệm sử dụng chatbot như thế nào?\nBạn có góp ý gì cho hệ thống không?\nVui lòng trả lời tin nhắn này để chúng tôi cải thiện dịch vụ. 🥰"
                 )
-                # Đánh dấu user đang chờ feedback
                 user.awaitingFeedback = True
                 db.commit()
             except Exception as e:
