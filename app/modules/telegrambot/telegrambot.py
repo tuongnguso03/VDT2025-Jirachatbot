@@ -106,7 +106,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 domain=user.domain
             )
 
-            formatted_conversation = ""
+            # formatted_conversation = ""
 
             loop = asyncio.get_event_loop()
             response, chat_history = await loop.run_in_executor(
