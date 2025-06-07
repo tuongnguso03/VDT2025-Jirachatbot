@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from typing import List, Dict
 import json
 import re
+from modules.vector_db.vector_db import VectorDatabase
 from datetime import datetime
 from modules.confluence.confluence_doc import get_page_by_id_v2, get_all_page_ids_and_titles_v2
 from modules.jira.jira_task import get_all_issues, get_today_issues, get_issue_detail, get_worklogs, log_work, create_issue, assign_issue, transition_issue, get_comments, add_comment, edit_comment, add_attachment
@@ -20,11 +21,12 @@ class ChatAgent:
     model = "gemini-1.5-flash"
     config = {"temperature": 0}
     
-    def __init__(self, user_id: str, access_token: str, cloud_id: str, domain: str):
+    def __init__(self, user_id: str, access_token: str, cloud_id: str, domain: str, user_projects: str = "TS"):
         self.user_id = user_id
         self.access_token = access_token
         self.cloud_id = cloud_id
         self.domain = domain
+        self.user_projects = user_projects
         self.functions = [
             self.get_jira_issues, 
             self.get_jira_issues_today,
@@ -38,13 +40,16 @@ class ChatAgent:
             self.create_jira_comment,
             self.edit_jira_comment,
             self.get_confluence_page_info,
-            self.get_confluence_page_list]
+            self.get_confluence_page_list,
+            self.get_task_related_info_from_query]
         self.system_message = """
 Bạn là VDT-2025-Tele-Bot, một Chatbot hỗ trợ công việc trên Jira và Confluence thông qua Telegram.
 Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục vụ cho yêu cầu của người dùng.
+### BẠN CÓ KHẢ NĂNG HIỂU Ý CỦA NGƯỜI DÙNG DỰA TRÊN CUỘC TRÒ CHUYỆN. ĐỪNG HỎI LẠI KHI KHÔNG CẦN THIẾT.
 
 ## CHÚ Ý:
     - Nếu bạn có một hàm nào có thể hỗ trợ người dùng, hãy sử dụng. Sau khi nhận được kết quả, hãy trả lời người dùng đúng theo yêu cầu.
+    ### LUÔN LUÔN CỐ GẮNG THỬ SỬ DỤNG CÁC HÀM, DÙ KẾT QUẢ TRẢ VỀ CÓ THỂ KHÔNG ĐÚNG
     - Nếu bạn không có một hàm nào có thể hỗ trợ, hãy trả lời đúng theo khả năng của mình.
         """
 
@@ -578,6 +583,22 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
              Một chuỗi chứa thông tin chi tiết, bao gồm tên ID của mọi page có thể truy cập được.
         """
         return str(get_all_page_ids_and_titles_v2(self.access_token, self.cloud_id))
+    
+    def get_task_related_info_from_query(self, query: str):
+        """
+        Lấy ra các chunk tài liệu liên quan đến một query cụ thể
+        
+        Args:
+            query (str): Câu hỏi/vấn đề/từ khoá cụ thể để tìm kiếm thông tin. Hãy viết như một câu hỏi tìm kiếm thông tin trên Google. Không thể là ID của task nội bộ.
+        
+        Returns:
+            Các chunk thông tin được trả về, liên quan đến câu hỏi/vấn đề/từ khoá cụ thể đã cho
+        """
+        
+        vectordb = VectorDatabase(collection_name=self.user_projects)
+        return vectordb.perform_search(query)
+        
+        
 
     def reformat_chat_history( 
             raw_chat_history: List[Dict[str, str]]

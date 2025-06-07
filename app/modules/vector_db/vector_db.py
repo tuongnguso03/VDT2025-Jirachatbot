@@ -169,7 +169,7 @@ class VectorDatabase:
                 return_metadata=MetadataQuery(distance=True),
                 filters=active_filter
             )
-            return response.objects if response else []
+            return [str(ob) for ob in response.objects] if response else []
         except Exception as e:
             print(f"Error during search: {e}")
             return []
