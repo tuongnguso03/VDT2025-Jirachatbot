@@ -5,10 +5,10 @@ from .vector_db import VectorDatabase
 from dotenv import load_dotenv
 from atlassian import Confluence
 import requests, json, re
+import html
 doc_router = APIRouter()
 
 load_dotenv()
-confluence_admin_api = os.environ.get("JIRA_ADMIN_API")
 
 class DocumentChangeRequest(BaseModel):
     space_key: str
@@ -37,6 +37,7 @@ def _format_page_details_v2(page_data: dict) -> dict:
 def admin_get_page(page_id: str):
     cloud_id = "122d270d-f780-4621-b27d-1989a54e38e5"
     username = "metalwallcrusher@gmail.com"
+    confluence_admin_api = os.environ.get("JIRA_ADMIN_API")
 
     confluence = Confluence(
         url=f'https://api.atlassian.com/ex/confluence/{cloud_id}/wiki/',
@@ -76,12 +77,15 @@ def document_change(request: DocumentChangeRequest):
     vectorDB = VectorDatabase(collection_name=request.space_key)
 
     
+
+    
     page_id = request.page_ID
     page_content = admin_get_page(page_id)["content"]
     
+    page_content = html.unescape(page_content)
     clean = re.compile('<.*?>')
     page_content = re.sub(clean, '', page_content)
-    page_content = re.sub(r'[^a-zA-Z\s]', '', page_content)
+    # page_content = re.sub(r'[^a-zA-Z\s]', '', page_content)
     
     vectorDB.update_document(page_content, document_name=page_id)
     return "update successful"
