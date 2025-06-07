@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import telegram.helpers
 from models import User, Message, Feedback
@@ -15,6 +15,8 @@ import tempfile
 import aiohttp
 import re
 from datetime import datetime
+
+bot = Bot(token=BOT_TOKEN)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,7 +83,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user.awaitingFeedback = False
             session.commit()
 
-            await update.message.reply_text("✅ Cảm ơn bạn đã góp ý!")
+            await update.message.reply_text("✅  Cảm ơn bạn đã góp ý!")
             return
 
         if user:
@@ -153,15 +155,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 escaped_text = escape_markdown(text_wo_code)
 
                 for i, block in enumerate(code_blocks):
-                    escaped_text = escaped_text.replace(f"\\[\\[CODE\\_BLOCK\\_{i}\\]\\]", block)  # cần escape dấu `[` khi bị escape markdown
+                    escaped_text = escaped_text.replace(f"\\[\\[CODE\\_BLOCK\\_{i}\\]\\]", block)  
 
                 return escaped_text
-
         
             formatted = format_markdown_text(reply_text)
 
             def reply_text_contains_markdown(text):
-                markdown_special_chars = r"```"
+                markdown_special_chars = r"```\\"
                 return any(char in text for char in markdown_special_chars)
 
             if reply_text_contains_markdown(reply_text):
@@ -287,20 +288,37 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Một số prompt bạn có thể thử:*\n"
         "- `Lấy ra danh sách các tasks`\n"
         "- `Lấy ra danh sách tasks hôm nay`\n"
-        "- `Lấy thông tin chi tiết task VDT-1`\n"
-        "- `Lấy ra danh sách worklog task VDT-1`\n"
-        "- `Log work cho tôi task VDT-1 bắt đầu từ 10:00 hôm nay, làm trong 30 phút và nội dung là Hoàn thành`\n"
-        "- `Tạo mới task với project_key: VDT, summary: Task mới, description: Nội dung task mới, issue_type: Task, deadline: 08/06/2025, giao cho Nguyễn Ngọc Hà đảm nhiệm`\n"
-        "- `Giao task VDT-1 cho Nguyễn Ngọc Hà đảm nhiệm`\n"
-        "- `Chuyển trạng thái task VDT-1 sang Done`\n"
-        "- `Lấy danh sách các bình luận của task VDT-1`\n"
-        "- `Tạo bình luận mới cho task VDT-1 với nội dung Hoàn thành`\n"
-        "- `Chỉnh sửa bình luận ID 10001 của task VDT-1 nội dung Đã fix bug`\n"
-        "- `Đính kèm file vào task VDT-1`\n"
-        "- `Lấy ra ID và tên của các page chứa nội dung tài liệu có thể truy cập được trong Confluence của task VDT-8`\n"
-        "- `Lấy ra thông tin chi tiết của John Lennon documentation ID 65849`\n\n"
+        "- `Lấy thông tin chi tiết task <Issue Key>`\n"
+        "- `Lấy ra danh sách worklog task <Issue Key>`\n"
+        "- `Log work cho tôi task <Issue Key> bắt đầu từ <HH:MM> hôm nay, làm trong <MM> phút và nội dung là <Content>`\n"
+        "- `Tạo mới task với project key: <Project Key>, summary: <Summary>, description: <Description>, issue type: <Issue Type>, Deadline: <DD/mm/YYYY>, giao cho <Name> đảm nhiệm, priority: <Priority>`\n"
+        "- `Giao task <Issue Key> cho <Name> đảm nhiệm`\n"
+        "- `Chuyển trạng thái task <Issue Key> sang <Transition Name>`\n"
+        "- `Lấy danh sách các bình luận của task <Issue Key>`\n"
+        "- `Tạo bình luận mới cho task <Issue Key> với nội dung <Content>`\n"
+        "- `Chỉnh sửa bình luận ID 10001 của task <Issue Key> nội dung <Content>`\n"
+        "- `Đính kèm file vào task <Issue Key>`\n"
+        "- `Lấy ra ID và tên của các page chứa nội dung tài liệu có thể truy cập được trong Confluence của task <Issue Key>`\n"
+        "- `Lấy ra thông tin chi tiết của <Document> <Document ID>`\n\n"
         "*Lệnh hỗ trợ:*\n"
         "/start - Đăng nhập Jira\n"
-        "/help - Hướng dẫn sử dụng"
+        "/help - Hướng dẫn sử dụng\n"
+        "/feedback - Hòm thư góp ý"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
+
+async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_telegram_id = update.effective_user.id
+    try:
+        await bot.send_message(
+            chat_id=user_telegram_id,
+            text="📣  KHẢO SÁT ĐỊNH KỲ\n\nBạn đánh giá trải nghiệm sử dụng chatbot như thế nào?\nBạn có góp ý gì cho hệ thống không?\nVui lòng trả lời tin nhắn này để chúng tôi cải thiện dịch vụ. 🥰"
+        )
+        db = SessionLocal()
+        user = db.query(User).filter(User.telegramId == user_telegram_id).first()
+        if user:
+            user.awaitingFeedback = True
+            db.commit()
+        db.close()
+    except Exception as e:
+        logger.exception(f"Error sending feedback prompt to user {user_telegram_id}")

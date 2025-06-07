@@ -73,53 +73,52 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             return text
 
         def format_markdown_table(issues: list[dict]) -> str:
-            MAX_SUMMARY_LENGTH = 22
+            MAX_SUMMARY_LENGTH = 20
+            MAX_KEY_LENGTH = 8
 
-            headers = ["Key", "Summary", "Type", "Priority", "Deadline"]
             col_widths = {
-                "key": max(len("Key"), max((len(issue["key"]) for issue in issues), default=0)),
+                "key": MAX_KEY_LENGTH,
                 "summary": MAX_SUMMARY_LENGTH,
-                "type": max(len("Type"), max((len(issue["type"]) for issue in issues), default=0)),
                 "priority": max(len("Priority"), max((len(issue.get("priority") or "") for issue in issues), default=0)),
-                "deadline": max(len("Deadline"), max((len(issue["deadline"]) if issue["deadline"] else 0 for issue in issues), default=0)),
+                "deadline": max(len("Deadline"), max((len(issue.get("deadline")) if issue["deadline"] else 0 for issue in issues), default=0)),
             }
 
             def pad(text: str, width: int) -> str:
-                return text + ' ' * (width - len(text))
+                return text.ljust(width)
 
             lines = []
 
             lines.append(
-                f"{pad('Key', col_widths['key'])} | "
+                f"{pad('Key', (col_widths['key'])-2)} | "
                 f"{pad('Summary', col_widths['summary'])} | "
-                # f"{pad('Type', col_widths['type'])} | "
                 f"{pad('Priority', col_widths['priority'])} | "
                 f"{pad('Deadline', col_widths['deadline'])}"
             )
 
             lines.append(
-                f"{'-' * (col_widths['key'] + 1)}|"
-                f"{'-' * (col_widths['summary'] + 2)}|"
-                # f"{'-' * (col_widths['type'] + 2)}|"
-                f"{'-' * (col_widths['priority'] + 2)}|"
-                f"{'-' * (col_widths['deadline'] + 1)}"
+                f"{'-' * (col_widths['key'] - 2)} | "
+                f"{'-' * col_widths['summary']} | "
+                f"{'-' * col_widths['priority']} | "
+                f"{'-' * col_widths['deadline']}"
             )
 
             for issue in issues:
-                key = pad(escape_markdown(issue['key']), col_widths['key'])
-                summary_raw = issue['summary'][:MAX_SUMMARY_LENGTH]
-                if len(issue['summary']) > MAX_SUMMARY_LENGTH:
-                    summary_raw = summary_raw[:-3] + "..."
-                summary = pad(escape_markdown(summary_raw), col_widths['summary'])
-                # type_ = pad(escape_markdown(issue['type']), col_widths['type'])
+                key_raw = issue.get("key") or ""
+                key = pad(escape_markdown(key_raw), col_widths['key'])
+
+                summary_raw = issue.get("summary") or ""
+                summary_cut = summary_raw[:MAX_SUMMARY_LENGTH]
+                if len(summary_raw) > MAX_SUMMARY_LENGTH:
+                    summary_cut = summary_cut[:-3] + "..."
+                summary = pad(escape_markdown(summary_cut), col_widths['summary'])
+
                 priority_raw = issue.get("priority") or ""
                 priority = pad(escape_markdown(priority_raw), col_widths['priority'])
+
                 deadline = issue['deadline'] if issue['deadline'] else ""
                 deadline = pad(escape_markdown(deadline), col_widths['deadline'])
 
-                lines.append(
-                    f"{key} | {summary} | {priority} | {deadline}"
-                )
+                lines.append(f"{key} | {summary} | {priority} | {deadline}")
 
             table = "\n".join(lines)
             return f"Đây là danh sách công việc của bạn:\n```{table}```"
@@ -146,58 +145,101 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             return text
 
         def format_markdown_table(issues: list[dict]) -> str:
-            MAX_SUMMARY_LENGTH = 22
+            MAX_SUMMARY_LENGTH = 20
+            MAX_KEY_LENGTH = 8
 
             headers = ["Key", "Summary", "Type", "Priority", "Deadline"]
             col_widths = {
-                "key": max(len("Key"), max((len(issue["key"]) for issue in issues), default=0)),
+                "key": MAX_KEY_LENGTH,
                 "summary": MAX_SUMMARY_LENGTH,
                 "type": max(len("Type"), max((len(issue["type"]) for issue in issues), default=0)),
                 "priority": max(len("Priority"), max((len(issue.get("priority") or "") for issue in issues), default=0)),
-                "deadline": max(len("Deadline"), max((len(issue["deadline"]) if issue["deadline"] else 0 for issue in issues), default=0)),
             }
 
             def pad(text: str, width: int) -> str:
-                return text + ' ' * (width - len(text))
+                return text.ljust(width)
 
             lines = []
 
             lines.append(
-                f"{pad('Key', col_widths['key'])} | "
+                f"{pad('Key', (col_widths['key'])-2)} | "
                 f"{pad('Summary', col_widths['summary'])} | "
                 f"{pad('Type', col_widths['type'])} | "
                 f"{pad('Priority', col_widths['priority'])}"
             )
 
             lines.append(
-                f"{'-' * (col_widths['key'] + 1)}|"
-                f"{'-' * (col_widths['summary'] + 2)}|"
-                f"{'-' * (col_widths['type'] + 2)}|"
-                f"{'-' * (col_widths['priority'] + 1)}"
+                f"{'-' * (col_widths['key'] - 2)} | "
+                f"{'-' * col_widths['summary']} | "
+                f"{'-' * col_widths['type']} | "
+                f"{'-' * col_widths['priority']}"
             )
 
             for issue in issues:
-                key = pad(escape_markdown(issue['key']), col_widths['key'])
+                key_raw = issue.get("key") or ""
+                key = pad(escape_markdown(key_raw), col_widths['key'])
 
-                summary_raw = issue['summary']
+                summary_raw = issue.get("summary") or ""
+                summary_cut = summary_raw[:MAX_SUMMARY_LENGTH]
                 if len(summary_raw) > MAX_SUMMARY_LENGTH:
-                    summary_raw = summary_raw[:MAX_SUMMARY_LENGTH - 3] + "..."
-                summary = pad(escape_markdown(summary_raw), col_widths['summary'])
+                    summary_cut = summary_cut[:-3] + "..."
+                summary = pad(escape_markdown(summary_cut), col_widths['summary'])
 
-                type = pad(escape_markdown(issue['type']), col_widths['type'])
+                type_raw = issue.get("type") or ""
+                type = pad(escape_markdown(type_raw), col_widths['type'])
+
                 priority_raw = issue.get("priority") or ""
                 priority = pad(escape_markdown(priority_raw), col_widths['priority'])
 
-                lines.append(
-                    f"{key} | {summary}| {type} | {priority}"
-                )
+                lines.append(f"{key} | {summary} | {type} | {priority}")
 
             table = "\n".join(lines)
             return f"Đây là danh sách công việc của bạn:\n```{table}```"
 
         return format_markdown_table(result)
+    
+    # def get_jira_issue_detail(self, issue_key: str):
+    #     """
+    #     Lấy ra chi tiết của một task từ issue_key
+        
+    #     Hàm này nhận vào key của một issue trong Jira và trả về thông tin chi tiết của issue đó.
 
+    #     Tham số:
+    #         issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
+            
+    #     Trả về:
+    #         Hàm này trả về khối mã được định dạng theo MarkdownV2. Không thêm bất kỳ văn bản nào. Không thêm bất kỳ mô tả hoặc tóm tắt nào
+    #     """
+    #     result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
 
+    #     attachment_urls = [
+    #         att.get("content_url") for att in result.get("attachments", []) if att.get("content_url")
+    #     ]
+
+    #     def escape(text):
+    #         if not text:
+    #             return ""
+    #         return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', str(text))
+
+    #     formatted = (
+    #         f"  📂 Dự án: {escape(result.get('project'))}\n"
+    #         f"  🔑 Jira Issue: {escape(result.get('key'))}\n"
+    #         f"  📝 Tóm tắt: {escape(result.get('summary'))}\n"
+    #         f"  ✏️ Mô tả: {escape(result.get('description'))}\n"
+    #         f"  🔖 Loại: {escape(result.get('type'))}\n"
+    #         f"  ⭐ Mức độ ưu tiên: {escape(result.get('priority'))}\n"
+    #         f"  📅 Deadline: {escape(result.get('duedate') or 'Không có')}\n"
+    #         f"  🚦 Trạng thái: {escape(result.get('status'))}\n"
+    #         f"  👷‍♂️ Người thực hiện: {escape(result.get('assignee') or 'Không có')}\n"
+    #         f"  🧾 Người tạo: {escape(result.get('reporter'))}\n"
+    #     )
+
+    #     if attachment_urls:
+    #         formatted += f"- Attachments: {json.dumps(attachment_urls)}\n"
+
+    #     return formatted
+
+    
     def get_jira_issue_detail(self, issue_key: str):
         """
         Lấy ra chi tiết của một task từ issue_key
@@ -208,27 +250,28 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
             
         Trả về:
-            Thông tin dự án đã formatted gồm cả icon.
+            Thông tin dự án đúng như hàm function call đã response.
         """
         result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
 
         attachment_urls = [att.get("content_url") for att in result.get("attachments", []) if att.get("content_url")]
-
-        formatted = (
-            f"- 📂 Dự án: {result.get('project', '')}\n"
-            f"- 🔑 Jira Issue: {result.get('key', '')}\n"
-            f"- 📝 Tóm tắt: {result.get('summary', '')}\n"
-            f"- ✏️ Mô tả: {result.get('description', '')}\n"
-            f"- 🔖 Loại: {result.get('type', '')}\n"
-            f"- ⭐ Mức độ ưu tiên: {result.get('priority', '')}\n"
-            f"- 📅 Deadline: {result.get('duedate', 'Không có')}\n"
-            f"- 🚦 Trạng thái: {result.get('status', '')}\n"
-            f"- 👷‍♂️ Người thực hiện: {result.get('assignee', 'Không có')}\n"
-            f"- 🧾 Người tạo: {result.get('reporter', '')}\n"
+        
+        formatted = f"Thông tin chi tiết task {issue_key}:\n\n"
+        formatted += (
+            f"  📂  Dự án: {result.get('project', '')}\n"
+            f"  🔑  Jira Issue: {result.get('key', '')}\n"
+            f"  📝  Tóm tắt: {result.get('summary', '')}\n"
+            f"  ✏️  Mô tả: {result.get('description', '')}\n"
+            f"  🔖  Loại: {result.get('type', '')}\n"
+            f"  ⭐  Mức độ ưu tiên: {result.get('priority', '')}\n"
+            f"  📅  Deadline: {result.get('duedate', 'Không có')}\n"
+            f"  🚦  Trạng thái: {result.get('status', '')}\n"
+            f"  👷‍♂️  Người thực hiện: {result.get('assignee', 'Không có')}\n"
+            f"  🧾  Người tạo: {result.get('reporter', '')}\n"
         )
 
         if attachment_urls:
-            formatted += f"- Attachments: {json.dumps(attachment_urls)}\n"
+            formatted += f"  - Attachments: {json.dumps(attachment_urls)}\n"
 
         return formatted
             
@@ -331,11 +374,11 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
 
         return f"✅ Đã log work thành công!\n\n{formatted}"
     
-    def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str):
+    def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str, priority: str):
         """
-        Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname, due_date
+        Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname, due_date, priority
 
-        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, displayname của người được giao task.
+        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, displayname của người được giao task và priority của task.
 
         Tham số:
             project_key (str): Key của project muốn tạo issue mới. Có thể bao gồm cả chữ và số.
@@ -343,12 +386,13 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             description (str): Mô tả issue.
             issue_type (str): Loại issue, không nói gì mặc định là Task.
             due_date (str): Ngày đến hạn deadline, có thể rỗng.
-            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này, có thể rỗng.
+            priority (str): Mức độ ưu tiên của task.
+            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này.
 
         Trả về:
-            Thông tin issue đầy đủ sau đã formatted gồm cả icon.
+            Trả về đầy đủ thông tin như dưới return formatted, phải đúng format, không diễn giải hay cắt bớt gì cả.
         """
-        result = create_issue(self.access_token, self.cloud_id, self.domain, project_key, summary, description, issue_type, due_date, assignee_displayname)
+        result = create_issue(self.access_token, self.cloud_id, self.domain, project_key, summary, description, issue_type, due_date, assignee_displayname, priority)
 
         formatted = (
             f"- Project Key: {project_key}\n"
@@ -358,6 +402,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Mô tả: {result.get('description', '')}\n"
             f"- Loại: {result.get('issue_type', '')}\n"
             f"- Ngày đến hạn: {result.get('due_date', 'N/A')}\n"
+            f"- Mức độ ưu tiên: {result.get('priority', 'N/A')}\n"
             f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
         ) 
 
