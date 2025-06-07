@@ -10,3 +10,5 @@ APScheduler
 python-dotenv
 aiohttp
 pytz
+weaviate-client
+nltk

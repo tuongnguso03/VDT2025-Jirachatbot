@@ -65,11 +65,11 @@ def _format_page_details_v2(page_data: dict) -> dict:
     body_view_value = body_info.get("view", {}).get("value") if "view" in body_info else None
     # body_adf_value = body_info.get("atlas_doc_format", {}).get("value") if "atlas_doc_format" in body_info else None
 
-    # links_info = page_data.get("_links", {})
-    # base_link_url = links_info.get("base", "") # Should be like https://your-domain.atlassian.net/wiki
-    # web_ui_path = links_info.get("webui", "")
-    # full_web_ui_link = f"{base_link_url}{web_ui_path}" if base_link_url and web_ui_path else \
-    #                    (f"{base_link_url}/pages/{page_data.get('id')}" if base_link_url and not web_ui_path else None)
+    links_info = page_data.get("_links", {})
+    base_link_url = links_info.get("base", "") # Should be like https://your-domain.atlassian.net/wiki
+    web_ui_path = links_info.get("webui", "")
+    full_web_ui_link = f"{base_link_url}{web_ui_path}" if base_link_url and web_ui_path else \
+                       (f"{base_link_url}/pages/{page_data.get('id')}" if base_link_url and not web_ui_path else None)
 
 
     # Space details if expanded and present
@@ -89,9 +89,9 @@ def _format_page_details_v2(page_data: dict) -> dict:
         # "version_minor_edit": version_info.get("minorEdit"),
         # "version_author_id": version_info.get("authorId"), # Author of this specific version
         # "version_created_at": version_info.get("createdAt"),
-        "body_view": body_view_value,
+        "content": body_view_value,
         # "body_atlas_doc_format": body_adf_value,
-        # "url": full_web_ui_link,
+        "url": full_web_ui_link,
         # "_links": links_info # Keep all links for flexibility
     }
 
