@@ -18,8 +18,8 @@ class ChatAgent:
     The chat agent class. Handle everything chat. Or that sort.
     """
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-    model = "gemini-1.5-flash"
-    config = {"temperature": 0}
+    model = "gemini-2.5-flash-preview-05-20"
+    config = {"temperature": 0, "maxOutputTokens": 1024}
     
     def __init__(self, user_id: str, access_token: str, cloud_id: str, domain: str, user_projects: str = "TS"):
         self.user_id = user_id

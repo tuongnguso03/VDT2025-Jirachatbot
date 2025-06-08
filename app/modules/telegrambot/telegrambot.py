@@ -115,7 +115,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 None, lambda: agent.chat_function(user_text, chat_history=formatted_conversation)
             )
 
-            reply_text = response.candidates[0].content.parts[0].text
+            reply_text = "\n".join([part.text for part in response.candidates[0].content.parts])
 
             attachments_urls = []
             match = re.search(r'Attachments:\s*(\[[\s\S]*?\])', reply_text)
