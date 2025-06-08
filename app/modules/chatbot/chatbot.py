@@ -43,23 +43,23 @@ class ChatAgent:
             self.get_confluence_page_list,
             self.get_task_related_info_from_query]
         self.system_message = """
-Bạn là VDT-2025-Tele-Bot, một Chatbot hỗ trợ công việc trên Jira và Confluence thông qua Telegram.
-Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục vụ cho yêu cầu của người dùng.
-### BẠN CÓ KHẢ NĂNG HIỂU Ý CỦA NGƯỜI DÙNG DỰA TRÊN CUỘC TRÒ CHUYỆN. ĐỪNG HỎI LẠI KHI KHÔNG CẦN THIẾT.
+        Bạn là VDT-2025-Tele-Bot, một Chatbot hỗ trợ công việc trên Jira và Confluence thông qua Telegram.
+        Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục vụ cho yêu cầu của người dùng.
+        ### BẠN CÓ KHẢ NĂNG HIỂU Ý CỦA NGƯỜI DÙNG DỰA TRÊN CUỘC TRÒ CHUYỆN. ĐỪNG HỎI LẠI KHI KHÔNG CẦN THIẾT.
 
-## CHÚ Ý:
-    - Nếu bạn có một hàm nào có thể hỗ trợ người dùng, hãy sử dụng. Sau khi nhận được kết quả, hãy trả lời người dùng đúng theo yêu cầu.
-    ### LUÔN LUÔN CỐ GẮNG THỬ SỬ DỤNG CÁC HÀM, DÙ KẾT QUẢ TRẢ VỀ CÓ THỂ KHÔNG ĐÚNG
-    - Nếu bạn không có một hàm nào có thể hỗ trợ, hãy trả lời đúng theo khả năng của mình.
+        ## CHÚ Ý:
+            - Nếu bạn có một hàm nào có thể hỗ trợ người dùng, hãy sử dụng. Sau khi nhận được kết quả, hãy trả lời người dùng đúng theo yêu cầu.
+            ### LUÔN LUÔN CỐ GẮNG THỬ SỬ DỤNG CÁC HÀM, DÙ KẾT QUẢ TRẢ VỀ CÓ THỂ KHÔNG ĐÚNG
+            - Nếu bạn không có một hàm nào có thể hỗ trợ, hãy trả lời đúng theo khả năng của mình.
         """
 
 
     def get_jira_issues(self):
         """
-        Lấy ra danh sách tasks (công việc) của người dùng và định dạng thành bảng MarkdownV2.
+        Lấy ra danh sách tasks (công việc) của người dùng và định dạng thành bảng MarkdownV2 hoặc plaint text.
 
         Trả về:
-            Chuỗi MarkdownV2 để gửi qua Telegram. Không được viết thêm gì nữa.
+            Chuỗi MarkdownV2 hoặc plaint text để gửi qua Telegram. Không được viết thêm gì nữa.
         """
         result = get_all_issues(self.access_token, self.cloud_id)
 
@@ -73,7 +73,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             return text
 
         def format_markdown_table(issues: list[dict]) -> str:
-            MAX_SUMMARY_LENGTH = 20
+            MAX_SUMMARY_LENGTH = 21
             MAX_KEY_LENGTH = 8
 
             col_widths = {
@@ -121,17 +121,17 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
                 lines.append(f"{key} | {summary} | {priority} | {deadline}")
 
             table = "\n".join(lines)
-            return f"Đây là danh sách công việc của bạn:\n```{table}```"
+            return f"Đây là danh sách công việc của bạn:```\n{table}\n```"
 
         return format_markdown_table(result)
 
 
     def get_jira_issues_today(self):
         """
-        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm nay và định dạng thành bảng MarkdownV2.
+        Lấy ra danh sách tasks (công việc) của người dùng ngày hôm nay và định dạng thành bảng MarkdownV2 hoặc plaint text.
 
         Trả về:
-            Hàm này trả về khối mã được định dạng theo MarkdownV2. Không thêm bất kỳ văn bản nào. Không thêm bất kỳ mô tả hoặc tóm tắt nào
+            Hàm này trả về khối mã được định dạng theo MarkdownV2 hoặc plaint text. Không thêm bất kỳ văn bản nào. Không thêm bất kỳ mô tả hoặc tóm tắt nào
         """
         result = get_today_issues(self.access_token, self.cloud_id)
 
@@ -139,13 +139,13 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             return "🎉 Bạn không có công việc nào đang xử lý!"
 
         def escape_markdown(text: str) -> str:
-            chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
+            chars_to_escape = r"\_*[]()~`>#+-=|{}.-!"
             for ch in chars_to_escape:
                 text = text.replace(ch, f"\\{ch}")
             return text
 
         def format_markdown_table(issues: list[dict]) -> str:
-            MAX_SUMMARY_LENGTH = 20
+            MAX_SUMMARY_LENGTH = 22
             MAX_KEY_LENGTH = 8
 
             headers = ["Key", "Summary", "Type", "Priority", "Deadline"]
@@ -194,51 +194,10 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
                 lines.append(f"{key} | {summary} | {type} | {priority}")
 
             table = "\n".join(lines)
-            return f"Đây là danh sách công việc của bạn:\n```{table}```"
+            return f"Đây là danh sách công việc của bạn hôm nay:```\n{table}\n```"
 
         return format_markdown_table(result)
     
-    # def get_jira_issue_detail(self, issue_key: str):
-    #     """
-    #     Lấy ra chi tiết của một task từ issue_key
-        
-    #     Hàm này nhận vào key của một issue trong Jira và trả về thông tin chi tiết của issue đó.
-
-    #     Tham số:
-    #         issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
-            
-    #     Trả về:
-    #         Hàm này trả về khối mã được định dạng theo MarkdownV2. Không thêm bất kỳ văn bản nào. Không thêm bất kỳ mô tả hoặc tóm tắt nào
-    #     """
-    #     result = get_issue_detail(self.access_token, self.cloud_id, issue_key)
-
-    #     attachment_urls = [
-    #         att.get("content_url") for att in result.get("attachments", []) if att.get("content_url")
-    #     ]
-
-    #     def escape(text):
-    #         if not text:
-    #             return ""
-    #         return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', str(text))
-
-    #     formatted = (
-    #         f"  📂 Dự án: {escape(result.get('project'))}\n"
-    #         f"  🔑 Jira Issue: {escape(result.get('key'))}\n"
-    #         f"  📝 Tóm tắt: {escape(result.get('summary'))}\n"
-    #         f"  ✏️ Mô tả: {escape(result.get('description'))}\n"
-    #         f"  🔖 Loại: {escape(result.get('type'))}\n"
-    #         f"  ⭐ Mức độ ưu tiên: {escape(result.get('priority'))}\n"
-    #         f"  📅 Deadline: {escape(result.get('duedate') or 'Không có')}\n"
-    #         f"  🚦 Trạng thái: {escape(result.get('status'))}\n"
-    #         f"  👷‍♂️ Người thực hiện: {escape(result.get('assignee') or 'Không có')}\n"
-    #         f"  🧾 Người tạo: {escape(result.get('reporter'))}\n"
-    #     )
-
-    #     if attachment_urls:
-    #         formatted += f"- Attachments: {json.dumps(attachment_urls)}\n"
-
-    #     return formatted
-
     
     def get_jira_issue_detail(self, issue_key: str):
         """
@@ -278,7 +237,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
     
     def get_jira_log_works(self, issue_key: str):
         """
-        Lấy ra danh sách worklog của một task từ issue_key
+        Lấy ra danh sách worklog của một task từ issue_key.
 
         Hàm này nhận vào key của một issue trong Jira và trả về danh sách worklog cho issue đó.
 
@@ -286,7 +245,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             issue_key (str): key của issue cần lấy thông tin. Có thể bao gồm cả chữ và số.
 
         Trả về:
-            Chuỗi MarkdownV2 để gửi qua Telegram. Trả về y hệt như đã format không được thêm thắt gì nữa.
+            Chuỗi MarkdownV2 hoặc plaint text để gửi qua Telegram. Trả về y hệt như đã format không được thêm thắt gì nữa.
         """
         result = get_worklogs(self.access_token, self.cloud_id, issue_key)
 
@@ -298,6 +257,8 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             for ch in chars_to_escape:
                 text = text.replace(ch, f"\\{ch}")
             return text
+        
+        MAX_COMMENT_LENGTH = 30
 
         def format_markdown_table(issues: list[dict]) -> str:
             headers = ["ID", "Author", "Start", "Time", "Comment"]
@@ -315,7 +276,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             lines = []
 
             lines.append(
-                f"{pad('ID', col_widths['id'])} | "
+                # f"{pad('ID', col_widths['id'])} | "
                 f"{pad('Author', col_widths['author'])} | "
                 # f"{pad('Started', col_widths['started'])} | "
                 f"{pad('Time', col_widths['time_spent'])} | "
@@ -323,26 +284,30 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             )
 
             lines.append(
-                f"{'-' * (col_widths['id'] + 1)}|"
-                f"{'-' * (col_widths['author'] + 2)}|"
+                # f"{'-' * (col_widths['id'] + 1)}|"
+                f"{'-' * (col_widths['author'] + 1)}|"
                 # f"{'-' * (col_widths['started'] + 2)}|"
                 f"{'-' * (col_widths['time_spent'] + 2)}|"
                 f"{'-' * (col_widths['comment'] + 1)}"
             )
 
             for issue in issues:
-                id = pad(escape_markdown(issue['id']), col_widths['id'])
+                # id = pad(escape_markdown(issue['id']), col_widths['id'])
                 author = pad(escape_markdown(issue['author']), col_widths['author'])
                 # started = pad(escape_markdown(issue['started']), col_widths['started'])
                 time_spent = pad(escape_markdown(issue['time_spent']), col_widths['time_spent'])
-                comment = pad(escape_markdown(issue['comment']), col_widths['comment'])
+                comment_raw = issue.get("comment") or ""
+                comment_cut = comment_raw[:MAX_COMMENT_LENGTH]
+                if len(comment_raw) > MAX_COMMENT_LENGTH:
+                    comment_cut = comment_cut[:-3] + "..."
+                comment = pad(escape_markdown(comment_cut), col_widths['comment'])
 
                 lines.append(
-                    f"{id} | {author} | {time_spent} | {comment}"
+                    f"{author} | {time_spent} | {comment}"
                 )
-
+        
             table = "\n".join(lines)
-            return f"Đây là danh sách worklog:\n```{table}```"
+            return f"Đây là danh sách worklog:```\n{table}\n```"
 
         return format_markdown_table(result)
 
@@ -363,22 +328,27 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
         """
         result = log_work(self.access_token, self.cloud_id, issue_key, time_spend, comment, date)
 
+        started_raw = result.get("started", "")
+        started_str = ""
+        if started_raw:
+            dt = datetime.strptime(started_raw, "%Y-%m-%dT%H:%M:%S.000%z")
+            started_str = dt.strftime("%H:%M %d-%m-%Y")
+
         formatted = (
             f"- Jira Issue: {result.get('issue_key', '')}\n"
-            f"- WorklogID: {result.get('id', '')}\n"
             f"- Người log work: {result.get('author', '')}\n"
-            f"- Thời gian làm việc: {result.get('time_spend', '')}\n"
-            f"- Thời gian bắt đầu làm: {result.get('started', '')}\n"
+            f"- Thời gian làm việc: {result.get('time_spend', '')} phút\n"
+            f"- Thời gian bắt đầu làm: {started_str}\n"
             f"- Comment: {result.get('comment', 'Không có')}\n"
-        ) 
+        )
 
-        return f"✅ Đã log work thành công!\n\n{formatted}"
+        return f"✅ Đã log work thành công!\n{formatted}"
     
     def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str, priority: str):
         """
         Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname, due_date, priority
 
-        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, displayname của người được giao task và priority của task.
+        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, assignee_displayname của người được giao task và priority của task.
 
         Tham số:
             project_key (str): Key của project muốn tạo issue mới. Có thể bao gồm cả chữ và số.
@@ -387,7 +357,7 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             issue_type (str): Loại issue, không nói gì mặc định là Task.
             due_date (str): Ngày đến hạn deadline, có thể rỗng.
             priority (str): Mức độ ưu tiên của task.
-            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này.
+            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này.
 
         Trả về:
             Trả về đầy đủ thông tin như dưới return formatted, phải đúng format, không diễn giải hay cắt bớt gì cả.
@@ -406,17 +376,17 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
         ) 
 
-        return formatted
+        return f"✅ Đã tạo issue thành công!\n{formatted}"
 
     def assign_jira_issue(self, issue_key: str, assignee_displayname: str):
         """
         Giao task cho user từ issue_key, assignee_displayname
 
-        Hàm này nhận vào key của một issue trong Jira cùng displayname của người được giao task.
+        Hàm này nhận vào key của một issue trong Jira cùng assignee_displayname của người được giao task.
 
         Tham số:
             issue_key (str): Key của issue muốn giao task. Có thể bao gồm cả chữ và số.
-            assignee_displayname (str): Tên của người được giao (đảm nhiệm) task này.
+            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này.
 
         Trả về:
             Một chuỗi chứa thông tin sau khi giao task.
@@ -430,11 +400,10 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Mô tả: {result.get('description', '')}\n"
             f"- Loại: {result.get('issue_type', '')}\n"
             f"- Ngày đến hạn: {result.get('due_date', 'N/A')}\n"
-            f"- AssigneeId: {result.get('assignee_id', 'Không có')}\n"
             f"- Người đảm nhiệm: {result.get('assignee_displayname', 'Không có')}\n"
         ) 
 
-        return formatted
+        return f"✅ Đã giao task thành công!\n{formatted}"
 
     def transition_jira_issue(self, issue_key: str, transition_name: str):
         """
@@ -458,11 +427,11 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Người đảm nhiệm: {result.get('assignee', 'Không có')}\n"
         ) 
 
-        return formatted
+        return f"✅ Đã chuyển trạng thái task thành công!\n{formatted}"
 
     def get_jira_comments(self, issue_key: str):
         """
-        Lấy danh sách các bình luận (comments) của task với issue_key
+        Lấy danh sách các bình luận (comments) của task với issue_key.
 
         Hàm này nhận vào key của một issue trong Jira.
 
@@ -470,12 +439,12 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             issue_key (str): Key của issue muốn lấy comments. Có thể bao gồm cả chữ và số.
 
         Trả về:
-            Chuỗi MarkdownV2 để gửi qua Telegram. Không được viết thêm gì nữa.
+            Chuỗi MarkdownV2 hoặc plaint text để gửi qua Telegram. Không được viết thêm gì nữa.
         """
         result = get_comments(self.access_token, self.cloud_id, issue_key)
 
         if not result:
-            return "🎉 Bạn không có công việc nào đang xử lý!"
+            return "Task hiện tại chưa có bình luận!"
 
         def escape_markdown(text: str) -> str:
             chars_to_escape = r"\_*[]()~`>#+-=|{}.!-"
@@ -503,14 +472,12 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
                 f"{pad('ID', col_widths['id'])} | "
                 f"{pad('Author', col_widths['author'])} | "
                 f"{pad('Comment', col_widths['body'])}"
-                # f"{pad('Created At', col_widths['created'])}"
             )
 
             lines.append(
                 f"{'-' * (col_widths['id'] + 1)}|"
                 f"{'-' * (col_widths['author'] + 2)}|"
                 f"{'-' * (col_widths['body'] + 1)}"
-                # f"{'-' * (col_widths['created'] + 1)}"
             )
 
             for issue in issues:
@@ -522,14 +489,13 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
                 body = pad(escape_markdown(comment_raw), col_widths['body'])
 
                 author = pad(escape_markdown(issue['author']), col_widths['author'])
-                # created = pad(escape_markdown(issue['created']), col_widths['created'])
 
                 lines.append(
                     f"{id} | {author} | {body}"
                 )
 
             table = "\n".join(lines)
-            return f"Đây là danh sách bình luận:\n```{table}```"
+            return f"Đây là danh sách bình luận:```\n{table}\n```"
 
         return format_markdown_table(result)
     
@@ -554,8 +520,8 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Nội dung: {result.get('comment', '')}\n"
         ) 
 
-        return formatted
-    
+        return f"✅ Đã tạo bình luận cho task thành công!\n{formatted}"
+
     def edit_jira_comment(self, issue_key: str, comment_id: int, new_comment: str):
         """
         Chỉnh sửa bình luận (comment) - comment_id của task issue_key với nội dung mới new_comment
@@ -578,14 +544,14 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
             f"- Nội dung: {result.get('new_comment', '')}\n"
         ) 
 
-        return formatted
+        return f"✅ Đã chỉnh sửa bình luận cho task thành công!\n{formatted}"
 
-    def attach_file_to_jira_issue(self, message: str) -> str:
+    def attach_file_to_jira_issue(self, issue_key: str) -> str:
         """
-        Đính kèm file vào Jira issue (tìm issue key từ message)
+        Đính kèm file (ảnh, tài liệu, ...) vào Jira issue
 
         Args:
-            message (str): Tin nhắn chứa issue key (VD: "vui lòng đính kèm file vào VDT-123")
+            issue_key (str): Key của issue muốn đính kèm file
 
         Returns:
             str: Nội dung phản hồi người dùng
@@ -596,14 +562,9 @@ Bạn có khả năng truy cập vào các hàm và gọi các hàm đó phục 
         if not file_path:
             return "Không tìm thấy file để đính kèm."
 
-        match = re.search(r"[A-Z]+-\d+", message)
-        if not match:
-            return "Không tìm thấy mã issue trong tin nhắn."
-
-        issue_key = match.group(0)
-
         try:
-            return add_attachment(self.access_token, self.cloud_id, issue_key, file_path, file_name)
+            add_attachment(self.access_token, self.cloud_id, issue_key, file_path, file_name)
+            return f"✅ Đã đính kèm file cho issue {issue_key.upper()} thành công!"
         except Exception as e:
             return f"Gặp lỗi khi đính kèm file: {str(e)}"
     

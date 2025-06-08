@@ -75,7 +75,7 @@ services:
     container_name: ngrok
     command: http api:8000 --domain ${NGROK_DOMAIN}
     environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN} 
+      - NGROK_AUTHTOKEN=2my0nC5lmqKpnPWW9Qgv7G6Y2Mb_22J87WGY94QybMATcEkzc
     networks:
       - backend
     depends_on:

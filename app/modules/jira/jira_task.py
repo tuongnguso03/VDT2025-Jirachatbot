@@ -169,19 +169,17 @@ def log_work(access_token, cloud_id, issue_key, time_spend, comment, date=None):
     
     worklog = jira.issue_worklog(issue_key, started, time_spend*60, comment)
 
-    log_id = worklog.get('id')
     author_name = worklog.get('author', {}).get('displayName', 'Unknown')
 
     return {
-        "issue_key": issue_key,
+        "issue_key": issue_key.upper(),
         "started": started,
         "time_spend": time_spend,
         "comment": comment,
-        "id": log_id,
         "author": author_name
     }
 
-# def get_account_id(email, access_token, cloud_id):
+# def get_account_id(access_token, cloud_id, email):
 #     url = f"https://api.atlassian.com/ex/jira/{cloud_id}.atlassian.net/rest/api/3/user/search?query={email}"
 #     headers = {
 #         "Authorization": f"Bearer {access_token}",
@@ -300,7 +298,7 @@ def transition_issue(access_token, cloud_id, issue_key, transition_name):
     assignee_name = assignee.get('displayName') if assignee else None
     
     return {
-        "issue_key": issue_key,
+        "issue_key": issue_key.upper(),
         "status": new_status,
         "summary": summary,
         "assignee": assignee_name,
@@ -335,7 +333,7 @@ def add_comment(access_token, cloud_id, issue_key, comment):
     comment_obj = jira.issue_add_comment(issue_key, comment)
     comment_id = comment_obj.get('id') if isinstance(comment_obj, dict) else getattr(comment_obj, 'id', None)
     return {
-        "issue_key": issue_key,
+        "issue_key": issue_key.upper(),
         "comment_id": comment_id,
         "comment": comment,
     }
@@ -344,7 +342,7 @@ def edit_comment(access_token, cloud_id, issue_key, comment_id, new_comment, vis
     jira = get_jira_client(access_token, cloud_id)
     jira.issue_edit_comment(issue_key, comment_id, new_comment, visibility=visibility, notify_users=notify_users)
     return {
-        "issue_key": issue_key,
+        "issue_key": issue_key.upper(),
         "comment_id": comment_id,
         "new_comment": new_comment,
     }
