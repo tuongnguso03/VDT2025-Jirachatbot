@@ -88,6 +88,7 @@ def document_change(request: DocumentChangeRequest):
     # page_content = re.sub(r'[^a-zA-Z\s]', '', page_content)
     
     vectorDB.update_document(page_content, document_name=page_id)
+    vectorDB.client.close()
     return "update successful"
 
 if __name__ == "__main__":

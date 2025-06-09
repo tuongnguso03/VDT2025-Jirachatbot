@@ -26,23 +26,6 @@ if not openai_api_key:
     print("Error: OPENAI_API_KEY must be set in your environment for Weaviate's text2vec-openai module.")
     exit(1) 
 
-# --- Weaviate Client Connection ---
-try:
-    client = weaviate.connect_to_weaviate_cloud(
-        cluster_url=weaviate_url,
-        auth_credentials=Auth.api_key(weaviate_api_key),
-        headers={
-            "X-OpenAI-Api-Key": openai_api_key
-        }
-    )
-    if not client.is_ready():
-        print("Weaviate client connected but not ready. Check Weaviate instance status.")
-        exit(1)
-    print("Successfully connected to Weaviate Cloud.")
-except WeaviateStartUpError as e:
-    print(f"Failed to connect to Weaviate: {e}")
-    exit(1)
-
 # --- NLTK Punkt Download ---
 try:
     nltk.data.find('tokenizers/punkt')
@@ -57,7 +40,7 @@ except:
 
 class VectorDatabase:
     @staticmethod
-    def get_collection(collection_name: str, model: str = "text-embedding-3-small") -> Collection:
+    def get_collection(client, collection_name: str, model: str = "text-embedding-3-small") -> Collection:
         """
         Retrieves a collection, or creates it configured for Weaviate's text2vec-openai module.
         """
@@ -83,13 +66,29 @@ class VectorDatabase:
             print("##################", e)
 
     def __init__(self, collection_name: str, openai_model: str = "text-embedding-3-small"):
-        self.client = client
+        # --- Weaviate Client Connection ---
+        try:
+            client = weaviate.connect_to_weaviate_cloud(
+                cluster_url=weaviate_url,
+                auth_credentials=Auth.api_key(weaviate_api_key),
+                headers={
+                    "X-OpenAI-Api-Key": openai_api_key
+                }
+            )
+            if not client.is_ready():
+                print("Weaviate client connected but not ready. Check Weaviate instance status.")
+                exit(1)
+            print("Successfully connected to Weaviate Cloud.")
+        except WeaviateStartUpError as e:
+            print(f"Failed to connect to Weaviate: {e}")
+            exit(1)
         
+        self.client = client
         if not collection_name[0].isupper():
              collection_name = collection_name[0].upper() + collection_name[1:]
         
         # Pass the model name to the collection getter
-        self.collection = VectorDatabase.get_collection(collection_name, model=openai_model)
+        self.collection = VectorDatabase.get_collection(client, collection_name, model=openai_model)
         print(f"VectorDatabase initialized for collection '{self.collection.name}' using '{openai_model}'.")
 
     def _chunk_by_sentences(self, document_text: str, sentences_per_chunk: int) -> list[str]:
@@ -231,8 +230,8 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nAn error occurred in the main execution block: {e}")
     finally:
-        if 'client' in locals() and client.is_connected():
-            client.close()
+        if 'client' in locals() and vector_db.client.is_connected():
+            vector_db.client.close()
             print("\nWeaviate client closed.")
     
     print("\n--- Demo Finished ---")

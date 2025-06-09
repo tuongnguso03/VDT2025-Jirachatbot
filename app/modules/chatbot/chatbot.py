@@ -19,7 +19,10 @@ class ChatAgent:
     """
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
     model = "gemini-2.5-flash-preview-05-20"
-    config = {"temperature": 0, "maxOutputTokens": 1024}
+    config = {
+                "temperature": 0, 
+                # "maxOutputTokens": 1024
+            }
     
     def __init__(self, user_id: str, access_token: str, cloud_id: str, domain: str, user_projects: str = "TS"):
         self.user_id = user_id
@@ -50,7 +53,8 @@ class ChatAgent:
         ## CHÚ Ý:
             - Nếu bạn có một hàm nào có thể hỗ trợ người dùng, hãy sử dụng. Sau khi nhận được kết quả, hãy trả lời người dùng đúng theo yêu cầu.
             ### LUÔN LUÔN CỐ GẮNG THỬ SỬ DỤNG CÁC HÀM, DÙ KẾT QUẢ TRẢ VỀ CÓ THỂ KHÔNG ĐÚNG
-            - Nếu bạn không có một hàm nào có thể hỗ trợ, hãy trả lời đúng theo khả năng của mình.
+            - Nếu kết quả trả từ hàm ra đã được format đẹp đẽ sạch sẽ, giữ nguyên format đó. Nếu kết quả chỉ là chuỗi json, hãy format lại cho đẹp đẽ sạch sẽ. 
+            - Nếu bạn không có một hàm nào có thể hỗ trợ, hãy cố gắng trở nên hữu dụng và đưa ra câu trả lời theo hiểu biết của mình.
         """
 
 
@@ -602,7 +606,9 @@ class ChatAgent:
         """
         
         vectordb = VectorDatabase(collection_name=self.user_projects)
-        return vectordb.perform_search(query)
+        result = vectordb.perform_search(query)
+        vectordb.client.close()
+        return result
         
         
 
