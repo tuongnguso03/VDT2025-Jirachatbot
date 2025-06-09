@@ -196,20 +196,43 @@ def normalize(text):
         return ""
     return unicodedata.normalize("NFKD", text).casefold().strip()
 
-def get_account_id(jira, project_key, assignee_displayname=None):
-    users = jira.get_all_assignable_users_for_project(project_key, start=0, limit=100)
+# def get_account_id(jira, project_key, assignee_displayname):
+#     users = jira.get_all_assignable_users_for_project(project_key, start=0, limit=100)
 
-    for user in users:
-        display_name = user.get("displayName", "")
-        email = user.get("emailAddress", "")
-        account_id = user.get("accountId")
+#     for user in users:
+#         display_name = user.get("displayName", "")
+#         email = user.get("emailAddress", "")
+#         account_id = user.get("accountId")
 
-        if assignee_displayname and normalize(display_name) == normalize(assignee_displayname):
-            return account_id
+#         if assignee_displayname and normalize(display_name) == normalize(assignee_displayname):
+#             return account_id
+
+#     return None
+
+def get_account_id(jira=None, project_key=None, access_token=None, cloud_id=None, assignee_displayname=None, assignee_email=None):
+    if jira and project_key and assignee_displayname:
+        users = jira.get_all_assignable_users_for_project(project_key, start=0, limit=100)
+        for user in users:
+            display_name = user.get("displayName", "")
+            account_id = user.get("accountId")
+            if normalize(display_name) == normalize(assignee_displayname):
+                return account_id
+
+    if access_token and cloud_id and assignee_email:
+        url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/user/search?query={assignee_email}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            users = response.json()
+            if users:
+                return users[0].get("accountId")
 
     return None
 
-def create_issue(access_token, cloud_id, domain, project_key, summary, description, issue_type, due_date=None, assignee_displayname=None, priority=None):
+def create_issue(access_token, cloud_id, domain, project_key, summary, description, issue_type, due_date=None, assignee_displayname=None, priority=None, assignee_email=None):
     jira = get_jira_client(access_token, cloud_id)
     
     fields = {
@@ -228,7 +251,9 @@ def create_issue(access_token, cloud_id, domain, project_key, summary, descripti
     
     assignee_id = None
     if assignee_displayname:
-        assignee_id = get_account_id(jira, project_key, assignee_displayname)
+        assignee_id = get_account_id(jira=jira, project_key=project_key, assignee_displayname=assignee_displayname)
+    elif assignee_email:
+        assignee_id = get_account_id(access_token=access_token, cloud_id=cloud_id, assignee_email=assignee_email)
 
     if assignee_id:
         fields["assignee"] = {"accountId": assignee_id}
@@ -244,20 +269,22 @@ def create_issue(access_token, cloud_id, domain, project_key, summary, descripti
         "issue_url": f"https://{domain}.atlassian.net/browse/{issue.get('key', '')}",
         "summary": summary,
         "assignee_id": assignee_id,
-        "assignee_displayname": assignee_displayname,
+        "assignee_displayname": assignee_displayname if assignee_displayname else assignee_email,
         "issue_type": issue_type,
         "description": description,
         "due_date": due_date,
         "priority": priority
     }
 
-def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None):
+def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None, assignee_email=None):
     jira = get_jira_client(access_token, cloud_id)
     project_key = issue_key.split('-')[0]
     
     assignee_id = None
     if assignee_displayname:
-        assignee_id = get_account_id(jira, project_key, assignee_displayname)
+        assignee_id = get_account_id(jira=jira, project_key=project_key, assignee_displayname=assignee_displayname)
+    elif assignee_email:
+        assignee_id = get_account_id(access_token=access_token, cloud_id=cloud_id, assignee_email=assignee_email)
 
     if assignee_id:
         jira.assign_issue(issue_key, assignee_id)
@@ -279,7 +306,7 @@ def assign_issue(access_token, cloud_id, issue_key, assignee_displayname=None):
         "project_key": project_key,
         "issue_key": issue.get("key", None),
         "assignee_id": assignee_id,
-        "assignee_displayname": assignee_displayname,
+        "assignee_displayname": assignee_displayname if assignee_displayname else assignee_email,
         "summary": fields.get("summary", None),
         "description": fields.get("description", None),
         "issue_type": fields.get("issuetype", {}).get("name", None),
@@ -367,13 +394,12 @@ def add_attachment(token, cloud_id, issue_key, file_path, file_name):
         return f"Không đính kèm được: {response.status_code} - {response.text}"
 
 def main():
-    access_token = """eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiI1Y2E1MDA5Zi01NWJkLTQxMzItOGZmOC1hN2JiNDVhYTFlNzMiLCJzdWIiOiI3MTIwMjA6MDhjN2RhNWMtNzZhMi00M2IxLTk3MGItY2FhYzVkZTJjMmQwIiwibmJmIjoxNzQ4NzEwNDY1LCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0ODcxMDQ2NSwiZXhwIjoxNzQ4NzE0MDY1LCJhdWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsInNjb3BlIjoibWFuYWdlOmppcmEtcHJvamVjdCBvZmZsaW5lX2FjY2VzcyByZWFkOmFjY291bnQgcmVhZDphbmFseXRpY3MuY29udGVudDpjb25mbHVlbmNlIHJlYWQ6YXBwLWRhdGE6Y29uZmx1ZW5jZSByZWFkOmJsb2dwb3N0OmNvbmZsdWVuY2UgcmVhZDpjb21tZW50OmNvbmZsdWVuY2UgcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuYWxsIHJlYWQ6Y29uZmx1ZW5jZS1jb250ZW50LnBlcm1pc3Npb24gcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtZ3JvdXBzIHJlYWQ6Y29uZmx1ZW5jZS1wcm9wcyByZWFkOmNvbmZsdWVuY2Utc3BhY2Uuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtdXNlciByZWFkOmNvbnRlbnQtZGV0YWlsczpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5tZXRhZGF0YTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5wcm9wZXJ0eTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudDpjb25mbHVlbmNlIHJlYWQ6Y3VzdG9tLWNvbnRlbnQ6Y29uZmx1ZW5jZSByZWFkOmRhdGFiYXNlOmNvbmZsdWVuY2UgcmVhZDplbWJlZDpjb25mbHVlbmNlIHJlYWQ6Zm9sZGVyOmNvbmZsdWVuY2UgcmVhZDpqaXJhLXVzZXIgcmVhZDpqaXJhLXdvcmsgcmVhZDptZSByZWFkOnBhZ2U6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLWRldGFpbHM6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLnByb3BlcnR5OmNvbmZsdWVuY2UgcmVhZDpzcGFjZTpjb25mbHVlbmNlIHJlYWQ6dGFzazpjb25mbHVlbmNlIHJlYWQ6dXNlcjpjb25mbHVlbmNlIHJlYWRvbmx5OmNvbnRlbnQuYXR0YWNobWVudDpjb25mbHVlbmNlIHdyaXRlOmppcmEtd29yayIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hdGxfdG9rZW5fdHlwZSI6IkFDQ0VTUyIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50SWQiOiI3MTIwMjA6MGIwY2E2MjUtMjQ5Ni00M2ZlLWE3MTgtYzczY2Q5ZGRlMTM1IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Nlc3Npb25faWQiOiIyYTFhZmQ4NC1mYWU0LTRhOWEtODc3Ni03Mjg1ZGU4NmE4MWYiLCJjbGllbnRfaWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9maXJzdFBhcnR5IjpmYWxzZSwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJ2ZXJpZmllZCI6InRydWUiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcHJvY2Vzc1JlZ2lvbiI6InVzLXdlc3QtMiIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS91anQiOiI2YjczZDg4OC00NDU1LTQwOWYtYjI4Ni1jNzdjMjZhY2NiNWUiLCJodHRwczovL2F0bGFzc2lhbi5jb20vZW1haWxEb21haW4iOiJnbWFpbC5jb20iLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcnRpIjoiZjU0NTgxYmItYjliOS00ODcyLWI5NmUtMDE0MWNkZDcwOTk3IiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tLzNsbyI6dHJ1ZSwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcmVmcmVzaF9jaGFpbl9pZCI6IkkzZVpkRTZoT09UeTBSV3Y4dTUxVUJ4MHJRMUU0MEk0LTcxMjAyMDowOGM3ZGE1Yy03NmEyLTQzYjEtOTcwYi1jYWFjNWRlMmMyZDAtNmYzZjc2ZGQtNjU2ZC00MjM2LTkwZjMtZTI3ODA1ODI0YTRlIiwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL29hdXRoQ2xpZW50SWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50RW1haWxEb21haW4iOiJjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsIjoiYmRjMjhhNzAtODNhNS00YmU2LWJmOTMtZjVmMTQ5NzhhNmFkQGNvbm5lY3QuYXRsYXNzaWFuLmNvbSJ9.jSyJPlTSyT3jWSOyzgHaGmvQdDBjsrHqSlbY233SqLPLf3jutK9lVjT7AYMHtLKUA84LkAPVC8J2DtHi7FdBw4Bpr5DSlx25AzbFivP1YfylGj9Le_oNwzEK2f3Vt1rI4ZPOTy_ki6cmDlaHfSYVxiDkCIjlsLyKEGz85_ydlq0V9sM6uO8RAJ1EzTN-zSdCpVDzzTSAluemBNNyd7e1NgITe4QW-rwVR2hl-5AY_tRJVHQYR_QCzYmL0pW0WXXf5XFDYlwQIGrk1WjbBztSVBPErJyDtACivcCNcxYOvf2JP4DrF8FZgejlDfSCi3Nqgny6t-Yu1yxfoQnR2fQniA"""
-
+    access_token = "eyJraWQiOiJhdXRoLmF0bGFzc2lhbi5jb20tQUNDRVNTLTk0ZTczYTkwLTUxYWQtNGFjMS1hOWFjLWU4NGUwNDVjNDU3ZCIsImFsZyI6IlJTMjU2In0.eyJqdGkiOiJiNGQ4YWU2OC01ZWU2LTQyMjQtODQzZS1lM2Y3NjNkNjM0M2QiLCJzdWIiOiI3MTIwMjA6YjZkMTIyYzgtNWY2OC00N2EzLTkwMjUtMTQ4NDc5MTBkNTE4IiwibmJmIjoxNzQ5NDQ0NTUwLCJpc3MiOiJodHRwczovL2F1dGguYXRsYXNzaWFuLmNvbSIsImlhdCI6MTc0OTQ0NDU1MCwiZXhwIjoxNzQ5NDQ4MTUwLCJhdWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsInNjb3BlIjoibWFuYWdlOmppcmEtcHJvamVjdCBvZmZsaW5lX2FjY2VzcyByZWFkOmFjY291bnQgcmVhZDphbmFseXRpY3MuY29udGVudDpjb25mbHVlbmNlIHJlYWQ6YXBwLWRhdGE6Y29uZmx1ZW5jZSByZWFkOmJsb2dwb3N0OmNvbmZsdWVuY2UgcmVhZDpjb21tZW50OmNvbmZsdWVuY2UgcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuYWxsIHJlYWQ6Y29uZmx1ZW5jZS1jb250ZW50LnBlcm1pc3Npb24gcmVhZDpjb25mbHVlbmNlLWNvbnRlbnQuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtZ3JvdXBzIHJlYWQ6Y29uZmx1ZW5jZS1wcm9wcyByZWFkOmNvbmZsdWVuY2Utc3BhY2Uuc3VtbWFyeSByZWFkOmNvbmZsdWVuY2UtdXNlciByZWFkOmNvbnRlbnQtZGV0YWlsczpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5tZXRhZGF0YTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudC5wcm9wZXJ0eTpjb25mbHVlbmNlIHJlYWQ6Y29udGVudDpjb25mbHVlbmNlIHJlYWQ6Y3VzdG9tLWNvbnRlbnQ6Y29uZmx1ZW5jZSByZWFkOmRhdGFiYXNlOmNvbmZsdWVuY2UgcmVhZDplbWJlZDpjb25mbHVlbmNlIHJlYWQ6Zm9sZGVyOmNvbmZsdWVuY2UgcmVhZDpqaXJhLXVzZXIgcmVhZDpqaXJhLXdvcmsgcmVhZDptZSByZWFkOnBhZ2U6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLWRldGFpbHM6Y29uZmx1ZW5jZSByZWFkOnNwYWNlLnByb3BlcnR5OmNvbmZsdWVuY2UgcmVhZDpzcGFjZTpjb25mbHVlbmNlIHJlYWQ6dGFzazpjb25mbHVlbmNlIHJlYWQ6dXNlcjpjb25mbHVlbmNlIHJlYWRvbmx5OmNvbnRlbnQuYXR0YWNobWVudDpjb25mbHVlbmNlIHdyaXRlOmppcmEtd29yayIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9ydGkiOiJiZDU4ODNkYy1lNjUyLTQ2NzEtODFhYi05ZGFiMTFlNDE0YmYiLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcmVmcmVzaF9jaGFpbl9pZCI6IkkzZVpkRTZoT09UeTBSV3Y4dTUxVUJ4MHJRMUU0MEk0LTcxMjAyMDpiNmQxMjJjOC01ZjY4LTQ3YTMtOTAyNS0xNDg0NzkxMGQ1MTgtZTVjMGQwMTItYTZjZi00M2ViLWI2YTYtYTljMGMxNjQzYWU1IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3VqdCI6IjVhNTE1NjdlLTY4ZGEtNDc3ZC1hMTgzLWM4YTljODRiMjkzMSIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hdGxfdG9rZW5fdHlwZSI6IkFDQ0VTUyIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50SWQiOiI3MTIwMjA6MGIwY2E2MjUtMjQ5Ni00M2ZlLWE3MTgtYzczY2Q5ZGRlMTM1IiwiaHR0cHM6Ly9pZC5hdGxhc3NpYW4uY29tL3Nlc3Npb25faWQiOiI2ZjQ0MjQ5YS04NzNhLTRmZTgtOWMyNS1hMzA3MWNhMGEzZjQiLCJjbGllbnRfaWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9maXJzdFBhcnR5IjpmYWxzZSwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL3ZlcmlmaWVkIjp0cnVlLCJodHRwczovL2lkLmF0bGFzc2lhbi5jb20vcHJvY2Vzc1JlZ2lvbiI6InVzLXdlc3QtMiIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9lbWFpbERvbWFpbiI6ImdtYWlsLmNvbSIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS8zbG8iOnRydWUsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS92ZXJpZmllZCI6dHJ1ZSwiaHR0cHM6Ly9hdGxhc3NpYW4uY29tL29hdXRoQ2xpZW50SWQiOiJJM2VaZEU2aE9PVHkwUld2OHU1MVVCeDByUTFFNDBJNCIsImh0dHBzOi8vYXRsYXNzaWFuLmNvbS9zeXN0ZW1BY2NvdW50RW1haWxEb21haW4iOiJjb25uZWN0LmF0bGFzc2lhbi5jb20iLCJodHRwczovL2F0bGFzc2lhbi5jb20vc3lzdGVtQWNjb3VudEVtYWlsIjoiYmRjMjhhNzAtODNhNS00YmU2LWJmOTMtZjVmMTQ5NzhhNmFkQGNvbm5lY3QuYXRsYXNzaWFuLmNvbSJ9.mcv6E4CsqBDQfP1VXN-g8y5DO2IFQ3qL06JIxG_3JageblEqXVR0E3E9TbFvNrsSXJNpZid9wQ2JZcktHcdrp1lLMg67NGrLtzD4nMQI-MaTmAIQRWBM4FosNcaqBYU9OI7N1AARBlhmnekwi3Bzl2r-tMpVFTXO2mfVxD01tGC9h2a1MfbPw2X5w--RjFtSyELBpOjgBkW0kgEA-Au6MAxWVfPha9Z6y82KqWeTJJA5tdqSY6YgqvhquD6iAsSfGzFXvwQzwbXEmHy8aup7NRlZ8FIgr2Bfx9quitgUdu3SreLh5EfmQUgLWEQAuFpDdLiN0SiEoRbFJaDsbrZ2eA"
     cloud_id = "122d270d-f780-4621-b27d-1989a54e38e5"
     domain = "metalwallcrusher"
     
     try:
-        issue = get_comments(access_token, cloud_id, "VDT-1")
+        issue = create_issue(access_token, cloud_id, domain, "VDT", "TEST", "This is a test issue created via API", "Task", "08/06/2025", "", "High", "nnha.1099@gmail.com")
         print(issue)
     except Exception as e:
         print("Lỗi khi lấy issue:", str(e))

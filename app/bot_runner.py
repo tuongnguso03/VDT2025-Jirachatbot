@@ -2,7 +2,6 @@ from telegram.ext import ApplicationBuilder
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from modules.telegrambot.telegrambot import start, handle_message, handle_file, help_command, feedback_command
 from modules.fastapi.config import BOT_TOKEN
-import asyncio
 
 # def run_bot():
 #     print("Bot is running with webhook...")
@@ -36,4 +35,4 @@ def run_bot():
     application.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    run_bot()
