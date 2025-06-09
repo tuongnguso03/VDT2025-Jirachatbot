@@ -344,11 +344,11 @@ class ChatAgent:
 
         return f"✅ Đã log work thành công!\n{formatted}"
     
-    def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, assignee_displayname: str, priority: str):
+    def create_jira_issue(self, project_key: str, summary: str, description: str, issue_type: str, due_date: str, priority: str, assignee_displayname: str = '', assignee_email: str = ''):
         """
-        Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname, due_date, priority
+        Tạo mới (task) issue từ project_key, summary, description, issue_type, assignee_displayname hoặc assignee_email, due_date, priority
 
-        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, assignee_displayname của người được giao task và priority của task.
+        Hàm này nhận vào key của một project trong Jira, ngày, tóm tắt, mô tả, loại issue, ngày đến hạn, assignee_displayname hoặc assignee_email của người được giao task và priority của task.
 
         Tham số:
             project_key (str): Key của project muốn tạo issue mới. Có thể bao gồm cả chữ và số.
@@ -357,12 +357,13 @@ class ChatAgent:
             issue_type (str): Loại issue, không nói gì mặc định là Task.
             due_date (str): Ngày đến hạn deadline, có thể rỗng.
             priority (str): Mức độ ưu tiên của task.
-            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này.
+            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này, có thể có hoặc không.
+            assignee_email (str): Email của người được giao (đảm nhiệm) task này, có thể có hoặc không. Nếu có thì sẽ ưu tiên assignee_email hơn.
 
         Trả về:
-            Trả về đầy đủ thông tin như dưới return formatted, phải đúng format, không diễn giải hay cắt bớt gì cả.
+            Trả về đầy đủ thông tin như bên dưới, không diễn giải hay cắt bớt gì cả.
         """
-        result = create_issue(self.access_token, self.cloud_id, self.domain, project_key, summary, description, issue_type, due_date, assignee_displayname, priority)
+        result = create_issue(self.access_token, self.cloud_id, self.domain, project_key.upper(), summary, description, issue_type, due_date, assignee_displayname, priority, assignee_email)
 
         formatted = (
             f"- Project Key: {project_key}\n"
@@ -378,23 +379,23 @@ class ChatAgent:
 
         return f"✅ Đã tạo issue thành công!\n{formatted}"
 
-    def assign_jira_issue(self, issue_key: str, assignee_displayname: str):
+    def assign_jira_issue(self, issue_key: str, assignee_displayname: str = '', assignee_email: str = ''):
         """
-        Giao task cho user từ issue_key, assignee_displayname
+        Giao task cho user từ issue_key, assignee_displayname hoặc assignee_email
 
-        Hàm này nhận vào key của một issue trong Jira cùng assignee_displayname của người được giao task.
+        Hàm này nhận vào key của một issue trong Jira cùng assignee_displayname hoặc assignee_email của người được giao task.
 
         Tham số:
             issue_key (str): Key của issue muốn giao task. Có thể bao gồm cả chữ và số.
-            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này.
+            assignee_displayname (str): Display name của người được giao (đảm nhiệm) task này, có thể rỗng.
+            assignee_email (str): Email của người được giao (đảm nhiệm) task này, có thể rỗng.
 
         Trả về:
             Một chuỗi chứa thông tin sau khi giao task.
         """
-        result = assign_issue(self.access_token, self.cloud_id, issue_key, assignee_displayname)
+        result = assign_issue(self.access_token, self.cloud_id, issue_key, assignee_displayname, assignee_email)
 
         formatted = (
-            f"- Project Key: {result.get('project_key', '')}\n"
             f"- Issue Key: {result.get('issue_key', '')}\n"
             f"- Tóm tắt: {result.get('summary', '')}\n"
             f"- Mô tả: {result.get('description', '')}\n"
