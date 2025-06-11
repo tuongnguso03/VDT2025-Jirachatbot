@@ -90,6 +90,34 @@ def get_today_issues(access_token, cloud_id):
         })
     return formatted_issues
 
+def get_today_logs(access_token, cloud_id):
+    jira = get_jira_client(access_token, cloud_id)
+    account_id = get_current_user(jira)["accountId"]
+    
+    tz_hn = pytz.timezone("Asia/Ho_Chi_Minh")
+    today_hn = datetime.now(tz_hn).strftime("%Y-%m-%d")
+    
+    jql = (
+        f'assignee = {account_id} AND '
+        f'duedate = "{today_hn}" '
+        f'ORDER BY duedate ASC'
+    )
+    
+    issues = jira.jql(jql)["issues"]
+    
+    formatted_issues = []
+    for issue in issues:
+        fields = issue["fields"]
+        formatted_issues.append({
+            "key": issue.get("key"),
+            "summary": fields.get("summary"),
+            "type": fields["issuetype"].get("name"),
+            "status": fields["status"].get("name"),
+            "deadline": fields.get("duedate"),
+            "priority": fields.get("priority", {}).get("name")
+        })
+    return formatted_issues
+
 def get_issue_detail(access_token, cloud_id, issue_key):
     jira = get_jira_client(access_token, cloud_id)
     issue = jira.issue(issue_key)

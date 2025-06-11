@@ -2,7 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 import pytz
 from database import SessionLocal
-from modules.jira.jira_task import get_today_issues, get_worklogs, get_current_user, get_jira_client
+from modules.jira.jira_task import get_today_issues, get_worklogs, get_current_user, get_jira_client, get_today_logs
 from modules.telegrambot.telegrambot import send_telegram_message 
 from models import User
 
@@ -59,7 +59,7 @@ def check_jira_worklogs():
             telegram_id = user.telegramId
 
             try:
-                today_issues = get_today_issues(access_token, cloud_id)
+                today_issues = get_today_logs(access_token, cloud_id)
                 if not today_issues:
                     continue
 
